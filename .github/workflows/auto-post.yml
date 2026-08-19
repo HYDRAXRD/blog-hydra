@@ -2,21 +2,14 @@ name: AI Auto Blog Post
 
 on:
   schedule:
-    # === FASE 1: Semanas 1-2 (3 posts/dia) ===
-    - cron: '0 11 * * *'   # 08:00 Brasilia
-    - cron: '0 17 * * *'   # 14:00 Brasilia
-    - cron: '0 23 * * *'   # 20:00 Brasilia
-
-    # === FASE 2: Semanas 3-4 (+ 2 posts extras = 5/dia) ===
-    - cron: '0 7 2-30 9 *'   # 04:00 Brasilia - setembro em diante
-    - cron: '0 14 2-30 9 *'  # 11:00 Brasilia - setembro em diante
-
-    # === FASE 3: Mes 2+ (+ 3 posts extras = 8/dia) ===
-    - cron: '0 2 19-30 9 *'   # 23:00 Brasilia
-    - cron: '0 5 19-30 9 *'   # 02:00 Brasilia
-    - cron: '0 20 19-30 9 *'  # 17:00 Brasilia
-
-    # Outubro em diante: 8 posts/dia completo
+    - cron: '0 11 * * *'
+    - cron: '0 17 * * *'
+    - cron: '0 23 * * *'
+    - cron: '0 7 2-30 9 *'
+    - cron: '0 14 2-30 9 *'
+    - cron: '0 2 19-30 9 *'
+    - cron: '0 5 19-30 9 *'
+    - cron: '0 20 19-30 9 *'
     - cron: '0 2 * 10-12 *'
     - cron: '0 5 * 10-12 *'
     - cron: '0 7 * 10-12 *'
@@ -33,10 +26,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4.3.1  # Node.js 24 compatible
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0  # full history needed for push
+          fetch-depth: 0
+
+      - name: Diagnose environment
+        run: |
+          echo "=== Python version ==="
+          python3 --version
+          echo "=== Script exists ==="
+          ls -la .github/scripts/generate_post.py
+          echo "=== OPENROUTER_API_KEY set ==="
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "ERROR: OPENROUTER_API_KEY is NOT set!"
+          else
+            echo "OK: key starts with ${OPENROUTER_API_KEY:0:8}..."
+          fi
+          echo "=== Git remote ==="
+          git remote -v
+          echo "=== Git status ==="
+          git status
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Generate post
         id: generate
@@ -61,4 +73,4 @@ jobs:
           fi
           git commit -m "Auto post: ${{ steps.generate.outputs.slug }}"
           git push origin main
-          echo "Post pushed — Cloudflare deploy triggered automatically"
+          echo "Post pushed - Cloudflare deploy triggered automatically"
