@@ -114,7 +114,9 @@ system_msg = "You are the content writer for HYDRA Chronicles, a crypto and meme
 
 user_msg = (
     f"Today is {today}. {topic}\n\n"
-    "Write a compelling, well-structured article of at least 500 words. Use headers, bullet points, and engaging storytelling. "
+    "Write a compelling, well-structured article of AT LEAST 1500 words. "
+    "Use multiple headers (##), bullet points, numbered lists, bold highlights, and engaging storytelling. "
+    "Include historical context, data points, community stories, and analysis. Make it long, detailed and informative. "
     f"Always end the content field with this exact disclaimer: {disclaimer}\n\n"
     "Return ONLY this JSON:\n"
     "{\n"
@@ -122,11 +124,11 @@ user_msg = (
     '  "title": "<catchy engaging title>",\n'
     f'  "slug": "{slug}",\n'
     '  "excerpt": "<compelling summary under 200 chars>",\n'
-    '  "content": "<full article in markdown, use \\n for newlines>",\n'
+    '  "content": "<full article in markdown, use \\n for newlines, minimum 1500 words>",\n'
     f'  "category": "{category}",\n'
     '  "author": "HYDRA AI",\n'
     f'  "date": "{today}",\n'
-    '  "readingTime": 5,\n'
+    '  "readingTime": 6,\n'
     '  "featured": false,\n'
     '  "coverImage": "",\n'
     f'  "tags": {json.dumps(tags)}\n'
@@ -152,7 +154,7 @@ for model in MODELS:
             {"role": "user", "content": user_msg}
         ],
         "temperature": 0.9,
-        "max_tokens": 3000
+        "max_tokens": 4500
     }).encode()
 
     req = urllib.request.Request(
@@ -203,6 +205,10 @@ except json.JSONDecodeError as e:
     print(f"JSON parse error: {e}")
     print(f"Raw content: {content[:500]}")
     sys.exit(1)
+
+# Dynamic reading time: ~200 words per minute
+word_count = len(post.get("content", "").split())
+post["readingTime"] = max(1, round(word_count / 200))
 
 print(f"Image key: {image_key}")
 print(f"Image prompt: {image_prompt}")
