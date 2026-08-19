@@ -82,13 +82,10 @@ user_msg = (
     "}"
 )
 
-# openrouter/free automatically picks an available free model
-# Fallbacks in case the router itself is unavailable
 MODELS = [
     "openrouter/free",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "google/gemma-4-31b-it:free",
-    "openai/gpt-oss-20b:free",
     "nvidia/nemotron-3-nano-30b-a3b:free",
 ]
 
@@ -119,25 +116,43 @@ for model in MODELS:
 
     try:
         with urllib.request.urlopen(req) as resp:
-            response_data = json.loads(resp.read())
-            print(f"Success with model: {model}")
-            break
+            data = json.loads(resp.read())
+
+        print(f"Full response: {json.dumps(data)[:300]}")
+
+        # Extract content safely - handle null content (reasoning models)
+        msg = data.get("choices", [{}])[0].get("message", {})
+        content = msg.get("content") or msg.get("reasoning") or ""
+
+        if not content or not content.strip():
+            print(f"Model {model} returned empty content, trying next...")
+            continue
+
+        response_data = data
+        content = content.strip()
+        print(f"Success with model: {model} ({len(content)} chars)")
+        break
+
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         print(f"Model {model} failed: {e.code} - {body}")
         continue
 
-if not response_data:
-    print("All models failed. Exiting.")
+if not response_data or not content:
+    print("All models failed or returned empty. Exiting.")
     sys.exit(1)
-
-content = response_data["choices"][0]["message"]["content"].strip()
-print(f"Response length: {len(content)} chars")
 
 # Strip markdown fences if model wraps response
 if content.startswith("```"):
     lines = content.split("\n")
     content = "\n".join(lines[1:-1]).strip()
+
+# Find JSON block if there's extra text around it
+if not content.startswith("{"):
+    start = content.find("{")
+    end = content.rfind("}") + 1
+    if start != -1 and end > start:
+        content = content[start:end]
 
 # Validate JSON
 try:
