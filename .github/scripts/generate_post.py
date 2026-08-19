@@ -74,16 +74,19 @@ image_key, topic = random.choice(pool)
 slug = f"post-{timestamp}"
 image_prompt = IMAGE_PROMPTS.get(image_key, DEFAULT_IMAGE_PROMPT)
 
+# Category logic
 if pool == HYDRA_TOPICS:
     category = random.choice(["Ecosystem", "Community", "News"])
-elif "guide" in image_key or "guide" in topic.lower():
+elif image_key in ["Dogecoin", "DOGE", "Shiba", "SHIB", "Pepe", "PEPE", "WIF", "dogwifhat", "BONK", "FLOKI", "memecoin", "millionaires"]:
+    category = "Memecoin"
+elif image_key == "guide":
     category = "Guides"
-elif "market" in image_key or "analysis" in topic.lower():
+elif image_key in ["market", "DeFi", "Radix"]:
     category = "News"
-elif "story" in topic.lower() or "deep dive" in topic.lower():
-    category = "Announcements"
-else:
+elif image_key == "psychology":
     category = "Community"
+else:
+    category = "Memecoin"
 
 tags_map = {
     "HYDRA": ["hydra", "radix", "defi"],
@@ -126,7 +129,7 @@ user_msg = (
     '  "excerpt": "<compelling summary under 200 chars>",\n'
     '  "content": "<full article in markdown, use \\n for newlines, minimum 1500 words>",\n'
     f'  "category": "{category}",\n'
-    '  "author": "HYDRA AI",\n'
+    '  "author": "HYDRA",\n'
     f'  "date": "{today}",\n'
     '  "readingTime": 6,\n'
     '  "featured": false,\n'
@@ -209,6 +212,10 @@ except json.JSONDecodeError as e:
 # Dynamic reading time: ~200 words per minute
 word_count = len(post.get("content", "").split())
 post["readingTime"] = max(1, round(word_count / 200))
+
+# Force correct author and category
+post["author"] = "HYDRA"
+post["category"] = category
 
 print(f"Image key: {image_key}")
 print(f"Image prompt: {image_prompt}")
