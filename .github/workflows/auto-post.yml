@@ -24,9 +24,42 @@ jobs:
           echo "Generating post with AI..."
 
           TODAY=$(date +%Y-%m-%d)
-          SLUG="hydra-update-$(date +%Y-%m-%d)"
+          DAY_OF_WEEK=$(date +%u) # 1=Monday ... 7=Sunday
 
-          PROMPT="You are the official content writer for HYDRA, a memecoin and DeFi ecosystem built on Radix DLT. Write an engaging, hype-driven blog post for today ($TODAY) about the HYDRA ecosystem. The post should feel energetic, community-driven, and futuristic. Cover one or more of these topics: HYDRA token news, HydraSwap, HydraBurn, HydraBattleArena, Radix DLT updates, DeFi tips, or community highlights. Return ONLY valid JSON with this exact structure, no markdown, no extra text: {\"id\": \"$SLUG\", \"title\": \"string\", \"slug\": \"$SLUG\", \"excerpt\": \"string max 200 chars\", \"content\": \"full article in markdown as single line with \\n for line breaks\", \"category\": \"one of: News|Ecosystem|Community|Game Updates|Guides|Announcements\", \"author\": \"HYDRA AI\", \"date\": \"$TODAY\", \"readingTime\": 4, \"featured\": false, \"coverImage\": \"\", \"tags\": [\"hydra\", \"radix\"]}"
+          # Rotate topic based on day of week for variety
+          if [ "$DAY_OF_WEEK" = "1" ]; then
+            TOPIC="Write about the HYDRA ecosystem on Radix DLT: token updates, HydraSwap, HydraBurn, HydraBattleArena, or community news. Be hype-driven and energetic."
+            SLUG="hydra-ecosystem-$(date +%Y-%m-%d)"
+            TAGS='["hydra", "radix", "ecosystem"]'
+          elif [ "$DAY_OF_WEEK" = "2" ]; then
+            TOPIC="Write an in-depth story about how Dogecoin (DOGE) exploded in popularity — origin, community, Elon Musk effect, key price moments. Educational and engaging tone. End with a financial disclaimer."
+            SLUG="dogecoin-story-$(date +%Y-%m-%d)"
+            TAGS='["dogecoin", "doge", "memecoin", "history"]'
+          elif [ "$DAY_OF_WEEK" = "3" ]; then
+            TOPIC="Write a deep dive into Shiba Inu (SHIB) — how it launched, the ShibArmy, the burn mechanism, and why it became a top memecoin. Educational tone. End with a financial disclaimer."
+            SLUG="shiba-inu-deep-dive-$(date +%Y-%m-%d)"
+            TAGS='["shiba", "shib", "memecoin", "history"]'
+          elif [ "$DAY_OF_WEEK" = "4" ]; then
+            TOPIC="Write about Pepe (PEPE) coin — how a frog meme became a billion-dollar token in weeks, community culture, and what made it explode. Educational and fun tone. End with a financial disclaimer."
+            SLUG="pepe-coin-story-$(date +%Y-%m-%d)"
+            TAGS='["pepe", "memecoin", "history", "culture"]'
+          elif [ "$DAY_OF_WEEK" = "5" ]; then
+            TOPIC="Write a guide: What makes a memecoin explode? Analyze patterns from DOGE, SHIB, PEPE, WIF, BONK and others. What do they have in common? Community, timing, narrative. Educational. End with a financial disclaimer."
+            SLUG="what-makes-memecoins-explode-$(date +%Y-%m-%d)"
+            TAGS='["memecoin", "guide", "doge", "shib", "pepe"]'
+          elif [ "$DAY_OF_WEEK" = "6" ]; then
+            TOPIC="Write about Solana memecoins WIF (dogwifhat) and BONK — how they launched, viral growth, and community culture. Compare with Ethereum memecoins. Educational. End with a financial disclaimer."
+            SLUG="solana-memecoins-wif-bonk-$(date +%Y-%m-%d)"
+            TAGS='["wif", "bonk", "solana", "memecoin"]'
+          else
+            TOPIC="Write a Sunday opinion piece: Why memecoins matter in crypto. Community, culture, financial inclusion, and fun. Reference HYDRA as an example of a community-driven ecosystem. End with a financial disclaimer."
+            SLUG="why-memecoins-matter-$(date +%Y-%m-%d)"
+            TAGS='["memecoin", "hydra", "community", "opinion"]'
+          fi
+
+          DISCLAIMER="\n\n---\n\n**⚠\ufe0f Disclaimer:** This article is for educational and entertainment purposes only. Nothing in this post constitutes financial advice. Cryptocurrency investments are highly volatile and speculative. Always do your own research (DYOR) before making any investment decisions. Past performance is not indicative of future results."
+
+          PROMPT="You are the official content writer for HYDRA Chronicles, a crypto blog covering the memecoin universe. Today is $TODAY. $TOPIC The article must be engaging, well-structured, and at least 400 words. Always end the content with this exact disclaimer (add it at the end of the content field): $DISCLAIMER. Return ONLY valid JSON with this exact structure, no markdown code blocks, no extra text before or after: {\"id\": \"$SLUG\", \"title\": \"string\", \"slug\": \"$SLUG\", \"excerpt\": \"string max 200 chars\", \"content\": \"full article in markdown as a single-line string using \\n for line breaks\", \"category\": \"one of: News|Ecosystem|Community|Game Updates|Guides|Announcements\", \"author\": \"HYDRA AI\", \"date\": \"$TODAY\", \"readingTime\": 5, \"featured\": false, \"coverImage\": \"\", \"tags\": $TAGS}"
 
           RESPONSE=$(curl -s https://openrouter.ai/api/v1/chat/completions \
             -H "Authorization: Bearer $OPENROUTER_API_KEY" \
@@ -39,12 +72,11 @@ jobs:
                 {\"role\": \"user\", \"content\": $(echo "$PROMPT" | python3 -c \"import json,sys; print(json.dumps(sys.stdin.read()))\")}
               ],
               \"temperature\": 0.85,
-              \"max_tokens\": 2000
+              \"max_tokens\": 2500
             }")
 
           echo "Raw API response received"
 
-          # Extract the content from the response
           POST_JSON=$(echo "$RESPONSE" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
@@ -59,7 +91,7 @@ print(content)
           echo "Extracted post JSON"
           echo "$POST_JSON" > "src/data/posts/${SLUG}.json"
           echo "slug=$SLUG" >> $GITHUB_OUTPUT
-          echo "Post saved: src/data/posts/${SLUG}.json"
+          echo "Post saved to: src/data/posts/${SLUG}.json"
 
       - name: Commit and push new post
         run: |
