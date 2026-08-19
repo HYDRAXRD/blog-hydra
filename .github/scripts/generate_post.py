@@ -13,54 +13,107 @@ hour = now.hour
 api_key = os.environ["OPENROUTER_API_KEY"]
 timestamp = now.strftime("%Y-%m-%d-%H")
 
+# ------------------------------------------------------------------
+# Load HYDRA official facts (single source of truth)
+# ------------------------------------------------------------------
+FACTS_PATH = ".github/data/hydra-facts.md"
+try:
+    with open(FACTS_PATH, "r", encoding="utf-8") as f:
+        HYDRA_FACTS = f.read()
+except FileNotFoundError:
+    HYDRA_FACTS = ""
+    print("WARNING: hydra-facts.md not found, proceeding without facts")
+
+# ------------------------------------------------------------------
+# Fetch real crypto news from CoinGecko (free, no key needed)
+# ------------------------------------------------------------------
+def fetch_coingecko_news(coin_id="bitcoin", limit=3):
+    """Fetch trending/news context from CoinGecko public API."""
+    try:
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false"
+        req = urllib.request.Request(url, headers={"User-Agent": "HYDRABlog/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        price = data.get("market_data", {}).get("current_price", {}).get("usd", "N/A")
+        change_24h = data.get("market_data", {}).get("price_change_percentage_24h", "N/A")
+        market_cap = data.get("market_data", {}).get("market_cap", {}).get("usd", "N/A")
+        description = data.get("description", {}).get("en", "")[:500]
+        return {
+            "price_usd": price,
+            "change_24h": change_24h,
+            "market_cap_usd": market_cap,
+            "description": description
+        }
+    except Exception as e:
+        print(f"CoinGecko fetch failed for {coin_id}: {e}")
+        return {}
+
+def fetch_trending_coins():
+    """Fetch trending coins from CoinGecko."""
+    try:
+        url = "https://api.coingecko.com/api/v3/search/trending"
+        req = urllib.request.Request(url, headers={"User-Agent": "HYDRABlog/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        coins = data.get("coins", [])[:5]
+        return [{"name": c["item"]["name"], "symbol": c["item"]["symbol"], "market_cap_rank": c["item"].get("market_cap_rank", "N/A")} for c in coins]
+    except Exception as e:
+        print(f"Trending fetch failed: {e}")
+        return []
+
+# ------------------------------------------------------------------
+# Image prompts
+# ------------------------------------------------------------------
 IMAGE_PROMPTS = {
-    "HYDRA": "six-headed blue hydra dragon in esports cartoon style, all six heads roaring with green eyes and sharp white fangs, metallic blue scales, black background with glowing blue neon ring border, circular badge composition, vibrant digital art, 4k",
-    "HydraSwap": "six-headed blue hydra dragon mascot inside a glowing crypto DEX swap portal, neon blue energy arrows swirling, dark futuristic background, esports cartoon style, vibrant digital art, 4k",
-    "Dogecoin": "the iconic shiba inu Doge meme dog wearing a gold astronaut helmet flying on a rocket to the moon, coins raining, neon night sky, vibrant digital art, 4k",
-    "DOGE": "the iconic shiba inu Doge meme dog wearing a gold astronaut helmet flying on a rocket to the moon, coins raining, neon night sky, vibrant digital art, 4k",
-    "Shiba": "a cute shiba inu dog wearing a red cape as crypto superhero, surrounded by burning SHIB coins, neon cityscape background, vibrant anime-style digital art, 4k",
-    "SHIB": "a cute shiba inu dog wearing a red cape as crypto superhero, surrounded by burning SHIB coins, neon cityscape background, vibrant anime-style digital art, 4k",
-    "Pepe": "the iconic Pepe the Frog wearing a suit sitting on a throne of gold crypto coins, dark moody lighting, meme culture aesthetic, vibrant digital art, 4k",
-    "PEPE": "the iconic Pepe the Frog wearing a suit sitting on a throne of gold crypto coins, dark moody lighting, meme culture aesthetic, vibrant digital art, 4k",
-    "WIF": "an adorable dog wearing a pink knitted hat in space surrounded by Solana purple neon lights, cute digital art, vibrant colors, cosmic background, 4k",
-    "dogwifhat": "an adorable dog wearing a pink knitted hat in space surrounded by Solana purple neon lights, cute digital art, vibrant colors, cosmic background, 4k",
-    "BONK": "a cartoon orange dog with a giant wooden bat smashing downward on crypto chart, Solana purple background, energetic explosive comic style digital art, 4k",
-    "FLOKI": "a viking warrior shiba inu dog in Norse armor holding a crypto coin shield, dramatic northern lights background, epic cinematic digital art, 4k",
-    "memecoin": "a rocket ship made of meme coin logos (doge, shib, pepe) blasting through a neon galaxy, epic cinematic digital art, vibrant colors, dark space background, 4k",
-    "market": "a futuristic crypto trading floor with glowing green and red candles, holographic price charts, dark cyberpunk environment, cinematic digital art, 4k",
-    "DeFi": "an intricate network of glowing blockchain nodes connecting across a dark digital universe, deep blue neon tones, cinematic art, 4k",
-    "Radix": "the Radix DLT blockchain network visualized as glowing blue interconnected nodes in space, futuristic digital art, deep blue and white, cinematic, 4k",
-    "guide": "a glowing treasure map overlaid on crypto charts and coin symbols, adventurer aesthetic, gold and dark blue tones, cinematic digital art, 4k",
-    "risks": "a dramatic warning sign made of crypto coins on the edge of a cliff, dark stormy digital art, red warning glow, cinematic crypto illustration, 4k",
-    "psychology": "a human brain made of glowing crypto candlesticks and coins, dark neon blue background, concept art, cinematic digital illustration, 4k",
-    "millionaires": "five golden crypto coins (DOGE SHIB PEPE WIF BONK) on pedestals with trophy glow, dark dramatic background, cinematic digital art, 4k",
+    "HYDRA": "minimalist dark crypto blog banner, six-headed dragon silhouette in deep blue neon outline, clean black background, no text, professional web3 aesthetic",
+    "HydraSwap": "minimalist dark crypto DEX banner, blue energy swap arrows, clean black background, no text, professional web3 aesthetic",
+    "Dogecoin": "minimalist dark crypto banner, golden shiba inu coin on dark background, clean professional web3 aesthetic, no text",
+    "DOGE": "minimalist dark crypto banner, golden shiba inu coin on dark background, clean professional web3 aesthetic, no text",
+    "Shiba": "minimalist dark crypto banner, red and orange shiba inu dog silhouette, dark background, professional web3 aesthetic, no text",
+    "SHIB": "minimalist dark crypto banner, red and orange shiba inu dog silhouette, dark background, professional web3 aesthetic, no text",
+    "Pepe": "minimalist dark crypto banner, green frog silhouette in gold crown, dark moody background, professional web3 aesthetic, no text",
+    "PEPE": "minimalist dark crypto banner, green frog silhouette in gold crown, dark moody background, professional web3 aesthetic, no text",
+    "WIF": "minimalist dark crypto banner, small dog silhouette wearing a hat, purple solana-toned background, professional web3 aesthetic, no text",
+    "dogwifhat": "minimalist dark crypto banner, small dog silhouette wearing a hat, purple solana-toned background, professional web3 aesthetic, no text",
+    "BONK": "minimalist dark crypto banner, orange dog with bat icon, solana purple tones, dark background, professional web3 aesthetic, no text",
+    "FLOKI": "minimalist dark crypto banner, viking helmet and shield silhouette, dark dramatic background, professional web3 aesthetic, no text",
+    "memecoin": "minimalist dark crypto banner, rocket silhouette with coin trail, dark cosmic background, professional web3 aesthetic, no text",
+    "market": "minimalist dark crypto banner, glowing candlestick chart lines, dark background, professional web3 aesthetic, no text",
+    "DeFi": "minimalist dark crypto banner, interconnected blockchain nodes in blue, dark background, professional web3 aesthetic, no text",
+    "Radix": "minimalist dark crypto banner, blue geometric network nodes, dark background, professional web3 aesthetic, no text",
+    "guide": "minimalist dark crypto banner, compass and map silhouette on dark background, gold accent, professional web3 aesthetic, no text",
+    "risks": "minimalist dark crypto banner, warning triangle with lightning bolt, dark red tones, professional web3 aesthetic, no text",
+    "psychology": "minimalist dark crypto banner, brain silhouette with circuit lines, dark neon blue, professional web3 aesthetic, no text",
+    "millionaires": "minimalist dark crypto banner, five gold coins on pedestals, dark dramatic background, professional web3 aesthetic, no text",
 }
+DEFAULT_IMAGE_PROMPT = "minimalist dark crypto blog banner, rocket silhouette and coin symbols, dark space background, professional web3 aesthetic, no text"
 
-DEFAULT_IMAGE_PROMPT = "a dramatic crypto memecoin rocket launching through neon galaxy stars, vibrant digital art, dark space background, glowing coins, cinematic 4k illustration"
-
+# ------------------------------------------------------------------
+# Topic pools
+# ------------------------------------------------------------------
 HYDRA_TOPICS = [
-    ("HYDRA", "Write about the HYDRA ecosystem on Radix DLT. Cover one of: HydraSwap DEX, HydraBurn token burn mechanics, HydraBattleArena game, HYDRA staking rewards, or community governance. Be energetic and hype-driven."),
-    ("HYDRA", "Write about why HYDRA on Radix DLT is positioned to be the next big memecoin. Cover Radix's unique tech advantages, HYDRA tokenomics, and community growth."),
-    ("HYDRA", "Write a guide on how to buy and hold HYDRA token on Radix DLT. Include wallet setup, where to swap, and why the community is bullish."),
+    ("HYDRA", "Write an educational article about the HYDRA memecoin on Radix DLT. Focus on the weekly burn mechanism (100,000 HYDRA burned every week), the HydraSwap DEX, and what makes it unique as a community-driven token launched on February 8, 2026."),
+    ("HYDRA", "Write an article explaining how to buy HYDRA token on Radix DLT using HydraSwap at hydraxrd.com/swap. Explain what Radix DLT is, why it matters for DeFi, and what the HYDRA community is building."),
+    ("HydraSwap", "Write about HydraSwap, the decentralized exchange (DEX) built on Radix DLT where HYDRA token is traded. Explain how DEXs work, why Radix DLT's asset-oriented model is different from EVM chains, and the role of HydraSwap in the HYDRA ecosystem."),
 ]
 
 MEMECOIN_TOPICS = [
-    ("Dogecoin", "Write the full story of Dogecoin (DOGE): from joke to $80B market cap. Cover the 2013 origin, Reddit community, Elon Musk tweets, and the 2021 explosion."),
-    ("Shiba", "Write a deep dive into Shiba Inu (SHIB): the DOGE killer narrative, ShibArmy, Vitalik Buterin burn, Shibarium launch, and price history."),
-    ("Pepe", "Write about Pepe (PEPE) coin: how a 4chan frog became a top-10 memecoin in 2023, the cultural roots, and the community explosion."),
-    ("WIF", "Write about WIF (dogwifhat) on Solana: the hat-wearing dog that hit $4B market cap, the meme origin, and Solana memecoin culture."),
-    ("BONK", "Write about BONK on Solana: the community airdrop that revived Solana in December 2022, how it distributed tokens, and what happened next."),
-    ("FLOKI", "Write about FLOKI: the Elon Musk dog name inspiration, Viking branding, FlokiFi DeFi suite, and global marketing campaigns."),
-    ("millionaires", "Write about the top 5 memecoins that made early holders millionaires: DOGE, SHIB, PEPE, WIF, BONK. What patterns did they share?"),
-    ("guide", "Write a guide: How to spot the next 1000x memecoin before it explodes. Cover community signals, liquidity, tokenomics, and timing."),
-    ("memecoin", "Write about memecoin culture: why memes are the most powerful marketing in crypto, community as product, and viral mechanics."),
-    ("risks", "Write about the risks of memecoins: rug pulls, wash trading, and how to protect yourself while still participating in the upside."),
+    ("Dogecoin", "Write the story of Dogecoin (DOGE): from joke to $80B market cap. Cover the 2013 origin, Reddit community, Elon Musk influence, and the 2021 explosion. Use real facts only."),
+    ("Shiba", "Write a deep dive into Shiba Inu (SHIB): the DOGE killer narrative, ShibArmy, Vitalik Buterin burn event, Shibarium launch. Use real data from CoinGecko."),
+    ("Pepe", "Write about Pepe (PEPE) coin: how a 4chan frog became a top memecoin in 2023. Cover the cultural roots and on-chain data."),
+    ("WIF", "Write about WIF (dogwifhat) on Solana: the hat-wearing dog that reached multi-billion market cap. Cover the meme origin and Solana memecoin culture."),
+    ("BONK", "Write about BONK on Solana: the community airdrop that energized Solana in December 2022. Cover how it distributed tokens and what happened next."),
+    ("FLOKI", "Write about FLOKI: the Viking-branded memecoin, FlokiFi DeFi suite, and global marketing. Use real data."),
+    ("millionaires", "Write about the top 5 memecoins that gave life-changing returns to early holders: DOGE, SHIB, PEPE, WIF, BONK. What patterns did they share?"),
+    ("guide", "Write a guide: How to research a memecoin before investing. Cover on-chain data, community signals, liquidity, tokenomics red flags, and timing. Be educational and honest about risks."),
+    ("memecoin", "Write about memecoin culture: why internet memes are the most powerful marketing force in crypto, community as product, and viral mechanics."),
+    ("risks", "Write an honest article about the risks of memecoins: rug pulls, wash trading, low liquidity traps, and how to protect yourself."),
 ]
 
 MARKET_TOPICS = [
-    ("market", "Write a market analysis of the current memecoin sector. Discuss Bitcoin dominance, altcoin season signals, and which narratives are trending."),
-    ("DeFi", "Write about DeFi on Radix DLT: why Radix's asset-oriented model is superior to EVM, and how HYDRA fits into the ecosystem."),
-    ("psychology", "Write about the psychology of memecoin investing: FOMO, diamond hands, paper hands, and how emotion drives 10x moves."),
+    ("market", "Write a market analysis of the current memecoin sector. Use trending coin data provided to discuss narratives and Bitcoin dominance signals."),
+    ("DeFi", "Write about DeFi on Radix DLT: why Radix's asset-oriented model differs from EVM, and the opportunity for new projects like HYDRA."),
+    ("psychology", "Write about the psychology of memecoin investing: FOMO, diamond hands, paper hands, and how emotion drives price action."),
 ]
 
 if hour < 13:
@@ -74,22 +127,56 @@ image_key, topic = random.choice(pool)
 slug = f"post-{timestamp}"
 image_prompt = IMAGE_PROMPTS.get(image_key, DEFAULT_IMAGE_PROMPT)
 
-# Category logic
+# ------------------------------------------------------------------
+# Fetch real market data from CoinGecko
+# ------------------------------------------------------------------
+market_context = ""
+coin_map = {
+    "Dogecoin": "dogecoin", "DOGE": "dogecoin",
+    "Shiba": "shiba-inu", "SHIB": "shiba-inu",
+    "Pepe": "pepe", "PEPE": "pepe",
+    "WIF": "dogwifcoin", "dogwifhat": "dogwifcoin",
+    "BONK": "bonk", "FLOKI": "floki",
+    "market": "bitcoin",
+}
+if image_key in coin_map:
+    print(f"Fetching CoinGecko data for {coin_map[image_key]}...")
+    cg_data = fetch_coingecko_data = fetch_coingecko_news(coin_map[image_key])
+    if cg_data:
+        market_context = f"""
+## Real Market Data (from CoinGecko, fetched now):
+- Current price: ${cg_data.get('price_usd', 'N/A')}
+- 24h change: {cg_data.get('change_24h', 'N/A')}%
+- Market cap: ${cg_data.get('market_cap_usd', 'N/A'):,} USD
+"""
+        print(f"CoinGecko data: {cg_data}")
+
+if image_key == "market" or pool == MARKET_TOPICS:
+    trending = fetch_trending_coins()
+    if trending:
+        market_context += "\n## Trending coins right now (CoinGecko):\n"
+        for t in trending:
+            market_context += f"- {t['name']} ({t['symbol']}) — Rank #{t['market_cap_rank']}\n"
+
+# ------------------------------------------------------------------
+# Category / tags
+# ------------------------------------------------------------------
 if pool == HYDRA_TOPICS:
-    category = random.choice(["Ecosystem", "Community", "News"])
-elif image_key in ["Dogecoin", "DOGE", "Shiba", "SHIB", "Pepe", "PEPE", "WIF", "dogwifhat", "BONK", "FLOKI", "memecoin", "millionaires"]:
-    category = "Memecoin"
+    category = random.choice(["News", "Guides"])
+elif image_key in ["Dogecoin","DOGE","Shiba","SHIB","Pepe","PEPE","WIF","dogwifhat","BONK","FLOKI","memecoin","millionaires"]:
+    category = "Moonshots"
 elif image_key == "guide":
     category = "Guides"
-elif image_key in ["market", "DeFi", "Radix"]:
-    category = "News"
+elif image_key in ["market","DeFi","Radix"]:
+    category = "Market Analysis"
 elif image_key == "psychology":
-    category = "Community"
+    category = "Market Analysis"
 else:
-    category = "Memecoin"
+    category = "Moonshots"
 
 tags_map = {
-    "HYDRA": ["hydra", "radix", "defi"],
+    "HYDRA": ["hydra", "radix", "memecoin"],
+    "HydraSwap": ["hydra", "hydrswap", "dex", "radix"],
     "Dogecoin": ["doge", "dogecoin", "memecoin"],
     "Shiba": ["shib", "shiba", "memecoin"],
     "Pepe": ["pepe", "memecoin", "culture"],
@@ -105,6 +192,9 @@ tags_map = {
 }
 tags = tags_map.get(image_key, ["memecoin", "crypto"])
 
+# ------------------------------------------------------------------
+# Build prompt
+# ------------------------------------------------------------------
 disclaimer = (
     "\n\n---\n\n"
     "**\u26a0\ufe0f Disclaimer:** This article is for educational and entertainment purposes only. "
@@ -113,13 +203,30 @@ disclaimer = (
     "Past performance is not indicative of future results."
 )
 
-system_msg = "You are the content writer for HYDRA Chronicles, a crypto and memecoin blog. Return ONLY a raw JSON object. No markdown fences. No extra text before or after the JSON."
+hydra_instruction = ""
+if pool == HYDRA_TOPICS and HYDRA_FACTS:
+    hydra_instruction = f"""
+
+## MANDATORY: Official HYDRA Facts — use ONLY these, never invent:
+{HYDRA_FACTS}
+"""
+
+system_msg = (
+    "You are the content writer for HYDRA Chronicles, a crypto and memecoin blog. "
+    "You write accurate, well-researched articles. "
+    "You NEVER invent statistics, prices, or claims that are not provided to you. "
+    "When market data is provided, use it. When it is not provided, say data varies and encourage readers to check live sources. "
+    "Return ONLY a raw JSON object. No markdown fences. No extra text before or after the JSON."
+)
 
 user_msg = (
-    f"Today is {today}. {topic}\n\n"
-    "Write a compelling, well-structured article of AT LEAST 1500 words. "
-    "Use multiple headers (##), bullet points, numbered lists, bold highlights, and engaging storytelling. "
-    "Include historical context, data points, community stories, and analysis. Make it long, detailed and informative. "
+    f"Today is {today}. {topic}\n"
+    f"{hydra_instruction}"
+    f"{market_context}\n"
+    "Write a compelling, well-structured article of AT LEAST 1200 words. "
+    "Use multiple headers (##), bullet points, bold highlights, and engaging storytelling. "
+    "Only include facts and data that are provided above or are widely established public knowledge. "
+    "Do NOT invent prices, statistics, user numbers, or claims not given to you. "
     f"Always end the content field with this exact disclaimer: {disclaimer}\n\n"
     "Return ONLY this JSON:\n"
     "{\n"
@@ -127,7 +234,7 @@ user_msg = (
     '  "title": "<catchy engaging title>",\n'
     f'  "slug": "{slug}",\n'
     '  "excerpt": "<compelling summary under 200 chars>",\n'
-    '  "content": "<full article in markdown, use \\n for newlines, minimum 1500 words>",\n'
+    '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words>",\n'
     f'  "category": "{category}",\n'
     '  "author": "HYDRA",\n'
     f'  "date": "{today}",\n'
@@ -138,6 +245,9 @@ user_msg = (
     "}"
 )
 
+# ------------------------------------------------------------------
+# Call AI
+# ------------------------------------------------------------------
 MODELS = [
     "openrouter/free",
     "nvidia/nemotron-3-super-120b-a12b:free",
@@ -156,7 +266,7 @@ for model in MODELS:
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg}
         ],
-        "temperature": 0.9,
+        "temperature": 0.7,
         "max_tokens": 4500
     }).encode()
 
@@ -209,20 +319,17 @@ except json.JSONDecodeError as e:
     print(f"Raw content: {content[:500]}")
     sys.exit(1)
 
-# Dynamic reading time: ~200 words per minute
+# Dynamic reading time
 word_count = len(post.get("content", "").split())
 post["readingTime"] = max(1, round(word_count / 200))
-
-# Force correct author and category
 post["author"] = "HYDRA"
 post["category"] = category
 
-print(f"Image key: {image_key}")
-print(f"Image prompt: {image_prompt}")
-
+# Cover image via Pollinations (minimalist prompts = cleaner results)
 encoded_prompt = urllib.parse.quote(image_prompt)
 image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true&seed={random.randint(1, 99999)}"
 post["coverImage"] = image_url
+print(f"Image key: {image_key}")
 print(f"Cover image URL: {image_url}")
 
 os.makedirs("src/data/posts", exist_ok=True)
