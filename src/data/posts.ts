@@ -1,57 +1,89 @@
 /**
  * HYDRA Blog — memecoin news content store.
  *
- * Articles are NOT written by hand here. An external generation tool appends
- * objects to the `posts` array below (or replaces the whole file), keeping the
- * exact `Post` shape. Everything in the UI (listing, filters, featured slot,
- * article page, related posts) is derived from this data.
+ * Articles are NOT written by hand here. The generation tool (GitHub Action)
+ * drops one JSON file per article into `src/data/posts/*.json` and this module
+ * loads every one of them automatically at build time.
  *
  * Content language: English.
  */
 
-export type PostCategory =
-  | "News"
-  | "Moonshots"
-  | "Market Analysis"
-  | "Case Studies"
-  | "Guides";
+import { markdownToHtml } from "@/lib/markdown";
 
-export interface Post {
-  /** URL slug, e.g. "dogecoin-2021-run" -> /blog/dogecoin-2021-run */
+/** Free-form category coming from the generator (e.g. "Memecoin", "News"). */
+export type PostCategory = string;
+
+/** Raw shape written by the generation tool into src/data/posts/*.json */
+export interface RawPost {
+  id?: string;
   slug: string;
   title: string;
-  /** 1-2 sentence summary used on cards and meta description. */
   excerpt: string;
-  category: PostCategory;
+  /** Article body in Markdown. */
+  content: string;
+  category?: string;
+  author?: string;
   /** ISO date string, e.g. "2026-08-19". */
   date: string;
-  author: string;
-  /** Estimated reading time in minutes. */
-  readingMinutes: number;
-  /** Absolute https URL for the cover image (optional). */
+  readingTime?: number;
+  featured?: boolean;
   coverImage?: string;
-  /** Ticker symbols covered, e.g. ["DOGE", "PEPE"]. */
+  tags?: string[];
+  tickers?: string[];
+}
+
+export interface Post {
+  slug: string;
+  title: string;
+  excerpt: string;
+  category: PostCategory;
+  date: string;
+  author: string;
+  readingMinutes: number;
+  coverImage?: string;
   tickers?: string[];
   tags?: string[];
-  /** Show in the big featured slot at the top of /blog. */
   featured?: boolean;
-  /** Article body as HTML (headings, paragraphs, lists, blockquotes). */
+  /** Article body rendered as HTML. */
   contentHtml: string;
 }
 
-export const categories: PostCategory[] = [
-  "News",
-  "Moonshots",
-  "Market Analysis",
-  "Case Studies",
-  "Guides",
-];
+const estimateReadingMinutes = (content: string): number =>
+  Math.max(1, Math.ceil(content.trim().split(/\s+/).length / 200));
 
-/** Populated by the article generation tool. */
-export const posts: Post[] = [];
+const toPost = (raw: RawPost): Post => ({
+  slug: raw.slug,
+  title: raw.title,
+  excerpt: raw.excerpt,
+  category: raw.category?.trim() || "News",
+  date: raw.date,
+  author: raw.author?.trim() || "HYDRA",
+  readingMinutes: raw.readingTime ?? estimateReadingMinutes(raw.content ?? ""),
+  ...(raw.coverImage ? { coverImage: raw.coverImage } : {}),
+  ...(raw.tickers?.length ? { tickers: raw.tickers } : {}),
+  ...(raw.tags?.length ? { tags: raw.tags } : {}),
+  ...(raw.featured ? { featured: true } : {}),
+  contentHtml: markdownToHtml(raw.content ?? ""),
+});
+
+// Auto-detects every JSON article in the posts folder at build time.
+const postModules = import.meta.glob("./posts/*.json", { eager: true }) as Record<
+  string,
+  { default: RawPost }
+>;
+
+export const posts: Post[] = Object.values(postModules)
+  .map((m) => m.default)
+  .filter((raw) => Boolean(raw?.slug && raw?.title))
+  .map(toPost);
 
 export const sortedPosts = (): Post[] =>
   [...posts].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+/** Categories actually present in the content, for the filter bar. */
+export const categories: PostCategory[] = Array.from(
+  new Set(posts.map((p) => p.category)),
+).sort();
 
 export const getPostBySlug = (slug: string): Post | undefined =>
   posts.find((p) => p.slug === slug);
