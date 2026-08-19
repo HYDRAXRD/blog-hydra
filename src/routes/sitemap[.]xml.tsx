@@ -1,10 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createAPIFileRoute } from "@tanstack/react-start/api";
 import { sortedPosts } from "@/data/posts";
 import { SITE_URL } from "@/lib/siteConfig";
 
-export const Route = createFileRoute("/sitemap.xml")({
-  loader: () => {
+export const APIRoute = createAPIFileRoute("/sitemap.xml")({
+  GET: () => {
     const posts = sortedPosts();
+
     type SitemapEntry = {
       url: string;
       priority: string;
@@ -43,5 +44,4 @@ export const Route = createFileRoute("/sitemap.xml")({
       },
     });
   },
-  component: () => null,
 });
