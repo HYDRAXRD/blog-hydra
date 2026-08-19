@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Particles from "@/components/Particles";
 import PostCard from "@/components/PostCard";
+import Comments from "@/components/Comments";
 import { formatDate, getPostBySlug, getRelatedPosts } from "@/data/posts";
 import { SITE_URL, SITE_NAME } from "@/lib/siteConfig";
 
