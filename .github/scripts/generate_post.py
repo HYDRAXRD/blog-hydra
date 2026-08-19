@@ -3,6 +3,7 @@ import json
 import urllib.request
 import urllib.error
 import urllib.parse
+import re
 from datetime import datetime, timezone
 import sys
 import random
@@ -22,6 +23,16 @@ except FileNotFoundError:
     print("WARNING: hydra-facts.md not found")
 
 
+def title_to_slug(title: str) -> str:
+    """Convert a post title to a clean URL slug without dates."""
+    slug = title.lower()
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)   # remove special chars
+    slug = re.sub(r"[\s]+", "-", slug.strip())   # spaces -> dashes
+    slug = re.sub(r"-+", "-", slug)              # collapse multiple dashes
+    slug = slug[:80].rstrip("-")                  # max 80 chars
+    return slug
+
+
 def format_price(price):
     """Format a crypto price as a human-readable decimal string, never scientific notation."""
     if price is None or price == "N/A":
@@ -32,12 +43,9 @@ def format_price(price):
         return str(price)
     if price >= 1:
         return f"{price:,.2f}"
-    # Count significant decimal places needed
     if price >= 0.01:
         return f"{price:.4f}"
-    # For very small prices, find how many zeros after decimal point
     formatted = f"{price:.10f}".rstrip("0")
-    # Ensure at least 2 significant digits after leading zeros
     return formatted
 
 
@@ -127,7 +135,6 @@ else:
     pool = MARKET_TOPICS + MEMECOIN_TOPICS
 
 image_key, topic = random.choice(pool)
-slug = f"post-{timestamp}"
 image_prompt = IMAGE_PROMPTS.get(image_key, DEFAULT_IMAGE_PROMPT)
 
 market_context = ""
@@ -218,6 +225,7 @@ system_msg = (
     "5. Write in a natural, human tone. Avoid sounding like AI. No robotic transitions like 'Furthermore', 'Moreover', 'In conclusion'.\n"
     "6. You NEVER invent statistics, prices, or claims not provided to you.\n"
     "7. PRICE FORMATTING: When writing any crypto price, ALWAYS use standard decimal notation (e.g. $0.00002083). NEVER use scientific notation (e.g. 2.079e-05). NEVER use more than 2 decimal places for percentages (e.g. 3.98%, never 3.98116%).\n"
+    "8. SLUG RULE: The slug must be derived ONLY from the title, lowercase, hyphens only, no dates, no timestamps. Example: title 'Dogecoin: From Joke to $80B' -> slug 'dogecoin-from-joke-to-80b'.\n"
     "Return ONLY a raw JSON object. No markdown fences. No extra text."
 )
 
@@ -234,9 +242,8 @@ user_msg = (
     f"End the content field with this exact disclaimer: {disclaimer}\n\n"
     "Return ONLY this JSON:\n"
     "{\n"
-    f'  "id": "{slug}",\n'
     '  "title": "<catchy engaging title>",\n'
-    f'  "slug": "{slug}",\n'
+    '  "slug": "<URL slug derived from the title: lowercase, hyphens only, NO dates, NO timestamps, max 80 chars. Example: dogecoin-from-joke-to-80b>",\n'
     '  "excerpt": "<compelling summary under 200 chars, prices in decimal notation only>",\n'
     '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words, NO bullet points, NO dashes, NO ### headers, ALL links masked, prices always in decimal notation>",\n'
     f'  "category": "{category}",\n'
@@ -320,6 +327,25 @@ except json.JSONDecodeError as e:
     print(f"Raw content: {content[:500]}")
     sys.exit(1)
 
+# --- Enforce clean slug from title (safety net) ---
+raw_slug = post.get("slug", "")
+if not raw_slug or re.search(r"\d{4}-\d{2}-\d{2}", raw_slug):
+    # AI returned date in slug or empty — regenerate from title
+    raw_slug = title_to_slug(post.get("title", f"post-{timestamp}"))
+    print(f"Slug regenerated from title: {raw_slug}")
+
+# Deduplicate: if slug already exists, append short hash
+existing_files = os.listdir("src/data/posts") if os.path.exists("src/data/posts") else []
+existing_slugs = {f.replace(".json", "") for f in existing_files if f.endswith(".json")}
+final_slug = raw_slug
+if final_slug in existing_slugs:
+    suffix = timestamp[-5:].replace("-", "")
+    final_slug = f"{raw_slug}-{suffix}"
+    print(f"Slug deduplicated: {final_slug}")
+
+post["slug"] = final_slug
+post["id"] = final_slug
+
 word_count = len(post.get("content", "").split())
 post["readingTime"] = max(1, round(word_count / 200))
 post["author"] = "HYDRA"
@@ -332,7 +358,7 @@ print(f"Image key: {image_key}")
 print(f"Cover image URL: {image_url}")
 
 os.makedirs("src/data/posts", exist_ok=True)
-out_path = f"src/data/posts/{slug}.json"
+out_path = f"src/data/posts/{final_slug}.json"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(post, f, indent=2, ensure_ascii=False)
 print(f"Saved: {out_path}")
@@ -346,7 +372,7 @@ if os.path.exists(index_path):
         except Exception:
             existing = []
 
-existing = [p for p in existing if p.get("slug") != post["slug"]]
+existing = [p for p in existing if p.get("slug") != final_slug]
 existing.insert(0, post)
 
 os.makedirs("public", exist_ok=True)
@@ -355,4 +381,4 @@ with open(index_path, "w", encoding="utf-8") as f:
 print(f"Index updated: {len(existing)} posts")
 
 print(f"SUCCESS:{out_path}")
-print(f"SLUG:{slug}")
+print(f"SLUG:{final_slug}")
