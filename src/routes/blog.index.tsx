@@ -7,7 +7,7 @@ import Particles from "@/components/Particles";
 import PostCard from "@/components/PostCard";
 import { categories, getFeaturedPost, sortedPosts, type PostCategory } from "@/data/posts";
 
-export const Route = createFileRoute("/blog")({
+export const Route = createFileRoute("/blog/")({
   head: () => ({
     meta: [
       { title: "HYDRA Blog — Meme Coin News, Moonshots & Market Analysis" },
