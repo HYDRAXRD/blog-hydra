@@ -6,8 +6,11 @@ import Footer from "@/components/Footer";
 import Particles from "@/components/Particles";
 import PostCard from "@/components/PostCard";
 import { categories, getFeaturedPost, sortedPosts, type PostCategory } from "@/data/posts";
+import { SITE_URL } from "@/lib/siteConfig";
 
-export const Route = createFileRoute("/blog/")({
+// Route registered WITHOUT trailing slash so it matches both
+// hydraxrd.com/blog  and  hydraxrd.com/blog/  (router normalises the latter)
+export const Route = createFileRoute("/blog")({
   head: () => ({
     meta: [
       { title: "HYDRA Blog — Meme Coin News, Moonshots & Market Analysis" },
@@ -23,10 +26,12 @@ export const Route = createFileRoute("/blog/")({
           "Meme coin news, moonshot breakdowns and market analysis from the HYDRA community.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:url", content: "/blog" },
+      { property: "og:url", content: `${SITE_URL}/blog` },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:site", content: "@HYDRAXRD" },
+      { name: "robots", content: "index, follow" },
     ],
-    links: [{ rel: "canonical", href: "/blog" }],
+    links: [{ rel: "canonical", href: `${SITE_URL}/blog` }],
     scripts: [
       {
         type: "application/ld+json",
@@ -35,7 +40,16 @@ export const Route = createFileRoute("/blog/")({
           "@type": "Blog",
           name: "HYDRA Blog",
           description: "Meme coin news, moonshots and market analysis.",
-          url: "https://hydraxrd.com/blog",
+          url: `${SITE_URL}/blog`,
+          publisher: {
+            "@type": "Organization",
+            name: "HYDRA",
+            url: SITE_URL,
+            logo: {
+              "@type": "ImageObject",
+              url: `${SITE_URL}/favicon.png`,
+            },
+          },
         }),
       },
     ],
@@ -64,7 +78,9 @@ function BlogIndex() {
     });
   }, [all, category, query]);
 
-  const rest = filtered.filter((p) => !featured || p.slug !== featured.slug || query || category !== "All");
+  const rest = filtered.filter(
+    (p) => !featured || p.slug !== featured.slug || query || category !== "All",
+  );
 
   return (
     <div className="min-h-screen bg-background">

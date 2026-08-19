@@ -10,6 +10,9 @@ export const getRouter = () => {
     context: { queryClient },
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
+    // Prevents Cloudflare 404s caused by trailing-slash mismatches.
+    // /blog/ -> /blog, /blog/slug/ -> /blog/slug
+    trailingSlash: "never",
   });
 
   return router;
