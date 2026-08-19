@@ -33,11 +33,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4.3.1  # Node.js 24 compatible
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # full history needed for push
 
-      # ------------------------------------------------------------------
-      # 1. Gerar o post via IA (Python puro, sem dependencias extras)
-      # ------------------------------------------------------------------
       - name: Generate post
         id: generate
         env:
@@ -49,16 +49,16 @@ jobs:
           echo "slug=$SLUG" >> $GITHUB_OUTPUT
           echo "Generated slug: $SLUG"
 
-      # ------------------------------------------------------------------
-      # 2. Commit do JSON do post — o push no main dispara o deploy
-      #    automatico do Cloudflare (via integracao Git da Lovable/Pages)
-      # ------------------------------------------------------------------
       - name: Commit and push post
         run: |
           git config user.name "HYDRA AI Bot"
           git config user.email "bot@hydraxrd.com"
+          git pull --rebase origin main
           git add src/data/posts/ public/posts-index.json
-          git diff --cached --quiet && echo "Nothing to commit" && exit 0
+          if git diff --cached --quiet; then
+            echo "Nothing to commit, skipping push"
+            exit 0
+          fi
           git commit -m "Auto post: ${{ steps.generate.outputs.slug }}"
-          git push
-          echo "Post committed and pushed — Cloudflare deploy triggered automatically via Git integration"
+          git push origin main
+          echo "Post pushed — Cloudflare deploy triggered automatically"
