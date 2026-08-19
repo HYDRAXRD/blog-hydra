@@ -2,7 +2,9 @@ name: AI Auto Blog Post
 
 on:
   schedule:
-    - cron: '0 12 * * *'
+    - cron: '0 11 * * *'  # 8:00 AM Brasilia
+    - cron: '0 17 * * *'  # 2:00 PM Brasilia
+    - cron: '0 23 * * *'  # 8:00 PM Brasilia
   workflow_dispatch:
 
 permissions:
@@ -27,6 +29,6 @@ jobs:
         run: |
           git config user.name "HYDRA AI Bot"
           git config user.email "bot@hydraxrd.com"
-          git add src/data/posts/
+          git add src/data/posts/ public/posts-index.json
           git diff --cached --quiet || git commit -m "Auto post: ${{ steps.generate.outputs.slug }}"
           git push

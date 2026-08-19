@@ -2,77 +2,115 @@ import os
 import json
 import urllib.request
 import urllib.error
-from datetime import date
+from datetime import datetime, timezone
 import sys
+import random
 
-today = date.today().isoformat()
-day = date.today().weekday()  # 0=Monday, 6=Sunday
+now = datetime.now(timezone.utc)
+today = now.strftime("%Y-%m-%d")
+hour = now.hour  # 11=morning, 17=afternoon, 23=evening UTC
 api_key = os.environ["OPENROUTER_API_KEY"]
 
-topics = [
-    {
-        "slug": f"hydra-ecosystem-{today}",
-        "tags": ["hydra", "radix", "ecosystem"],
-        "topic": "Write about the HYDRA ecosystem on Radix DLT: token updates, HydraSwap, HydraBurn, HydraBattleArena, or community news. Be hype-driven and energetic."
-    },
-    {
-        "slug": f"dogecoin-story-{today}",
-        "tags": ["dogecoin", "doge", "memecoin", "history"],
-        "topic": "Write an in-depth story about how Dogecoin (DOGE) exploded in popularity: origin, community, Elon Musk effect, key price moments. Educational and engaging tone."
-    },
-    {
-        "slug": f"shiba-inu-deep-dive-{today}",
-        "tags": ["shiba", "shib", "memecoin", "history"],
-        "topic": "Write a deep dive into Shiba Inu (SHIB): how it launched, the ShibArmy, burn mechanism, and why it became a top memecoin. Educational tone."
-    },
-    {
-        "slug": f"pepe-coin-story-{today}",
-        "tags": ["pepe", "memecoin", "history", "culture"],
-        "topic": "Write about Pepe (PEPE) coin: how a frog meme became a billion-dollar token in weeks, community culture, and what made it explode. Fun and educational tone."
-    },
-    {
-        "slug": f"what-makes-memecoins-explode-{today}",
-        "tags": ["memecoin", "guide", "doge", "shib", "pepe"],
-        "topic": "Write a guide: What makes a memecoin explode? Analyze patterns from DOGE, SHIB, PEPE, WIF, BONK. What do they have in common? Community, timing, narrative."
-    },
-    {
-        "slug": f"solana-memecoins-{today}",
-        "tags": ["wif", "bonk", "solana", "memecoin"],
-        "topic": "Write about Solana memecoins WIF (dogwifhat) and BONK: how they launched, viral growth, community culture. Compare with Ethereum memecoins."
-    },
-    {
-        "slug": f"why-memecoins-matter-{today}",
-        "tags": ["memecoin", "hydra", "community", "opinion"],
-        "topic": "Write an opinion piece: Why memecoins matter in crypto. Community, culture, financial inclusion, and fun. Reference HYDRA as an example of a community-driven ecosystem."
-    },
+# Unique slug per post using timestamp
+timestamp = now.strftime("%Y-%m-%d-%H")
+
+# Topic pools - randomly selected each run for variety
+HYDRA_TOPICS = [
+    "Write about the HYDRA ecosystem on Radix DLT. Cover one of: HydraSwap DEX, HydraBurn token burn mechanics, HydraBattleArena game, HYDRA staking rewards, or community governance. Be energetic and hype-driven.",
+    "Write about why HYDRA on Radix DLT is positioned to be the next big memecoin. Cover Radix's unique tech advantages, HYDRA tokenomics, and community growth.",
+    "Write a guide on how to buy and hold HYDRA token on Radix DLT. Include wallet setup, where to swap, and why the community is bullish.",
 ]
 
-t = topics[day]
-slug = t["slug"]
-tags = t["tags"]
-topic = t["topic"]
+MEMECOIN_TOPICS = [
+    "Write the full story of Dogecoin (DOGE): from joke to $80B market cap. Cover the 2013 origin, Reddit community, Elon Musk tweets, and the 2021 explosion.",
+    "Write a deep dive into Shiba Inu (SHIB): the DOGE killer narrative, ShibArmy, Vitalik Buterin burn, Shibarium launch, and price history.",
+    "Write about Pepe (PEPE) coin: how a 4chan frog became a top-10 memecoin in 2023, the cultural roots, and the community explosion.",
+    "Write about WIF (dogwifhat) on Solana: the hat-wearing dog that hit $4B market cap, the meme origin, and Solana memecoin culture.",
+    "Write about BONK on Solana: the community airdrop that revived Solana in December 2022, how it distributed tokens, and what happened next.",
+    "Write about FLOKI: the Elon Musk dog name inspiration, Viking branding, FlokiFi DeFi suite, and global marketing campaigns.",
+    "Write about the top 5 memecoins that made early holders millionaires: DOGE, SHIB, PEPE, WIF, BONK. What patterns did they share?",
+    "Write a guide: How to spot the next 1000x memecoin before it explodes. Cover community signals, liquidity, tokenomics, and timing.",
+    "Write about memecoin culture: why memes are the most powerful marketing in crypto, community as product, and viral mechanics.",
+    "Write about the risks of memecoins: rug pulls, wash trading, and how to protect yourself while still participating in the upside.",
+]
+
+MARKET_TOPICS = [
+    "Write a market analysis of the current memecoin sector. Discuss Bitcoin dominance, altcoin season signals, and which narratives are trending.",
+    "Write about DeFi on Radix DLT: why Radix's asset-oriented model is superior to EVM, and how HYDRA fits into the ecosystem.",
+    "Write about the psychology of memecoin investing: FOMO, diamond hands, paper hands, and how emotion drives 10x moves.",
+]
+
+# Rotate topic pools by hour to ensure variety across 3 daily posts
+if hour < 13:  # Morning post
+    pool = HYDRA_TOPICS
+    post_type = "morning"
+elif hour < 20:  # Afternoon post
+    pool = MEMECOIN_TOPICS
+    post_type = "afternoon"
+else:  # Evening post
+    pool = MARKET_TOPICS + MEMECOIN_TOPICS
+    post_type = "evening"
+
+topic = random.choice(pool)
+slug = f"post-{timestamp}"
+
+# Assign category based on topic pool
+if pool == HYDRA_TOPICS:
+    category = random.choice(["Ecosystem", "Community", "News"])
+elif "guide" in topic.lower() or "how to" in topic.lower() or "spot" in topic.lower():
+    category = "Guides"
+elif "analysis" in topic.lower() or "market" in topic.lower():
+    category = "News"
+elif "story" in topic.lower() or "deep dive" in topic.lower() or "history" in topic.lower():
+    category = "Announcements"
+else:
+    category = "Community"
+
+tags_map = {
+    "HYDRA": ["hydra", "radix", "defi"],
+    "Dogecoin": ["doge", "dogecoin", "memecoin"],
+    "Shiba": ["shib", "shiba", "memecoin"],
+    "Pepe": ["pepe", "memecoin", "culture"],
+    "WIF": ["wif", "solana", "memecoin"],
+    "BONK": ["bonk", "solana", "memecoin"],
+    "FLOKI": ["floki", "memecoin", "defi"],
+    "market": ["market", "analysis", "crypto"],
+    "guide": ["guide", "memecoin", "crypto"],
+    "spot": ["guide", "memecoin", "tips"],
+    "risks": ["risk", "safety", "memecoin"],
+    "psychology": ["psychology", "trading", "memecoin"],
+    "memes": ["meme", "culture", "community"],
+    "millionaires": ["memecoin", "history", "doge"],
+    "DeFi": ["defi", "radix", "blockchain"],
+}
+tags = ["memecoin", "crypto"]
+for key, t in tags_map.items():
+    if key.lower() in topic.lower():
+        tags = t
+        break
 
 disclaimer = (
     "\n\n---\n\n"
-    "**Disclaimer:** This article is for educational and entertainment purposes only. "
-    "Nothing here constitutes financial advice. Crypto investments are highly volatile. "
-    "Always do your own research (DYOR) before making any investment decisions."
+    "**\u26a0\ufe0f Disclaimer:** This article is for educational and entertainment purposes only. "
+    "Nothing here constitutes financial advice. Cryptocurrency investments are highly volatile and speculative. "
+    "Always do your own research (DYOR) before making any investment decisions. "
+    "Past performance is not indicative of future results."
 )
 
-system_msg = "You are the content writer for HYDRA Chronicles, a crypto blog. Return ONLY a raw JSON object with no markdown code fences and no extra text before or after."
+system_msg = "You are the content writer for HYDRA Chronicles, a crypto and memecoin blog. Return ONLY a raw JSON object. No markdown fences. No extra text before or after the JSON."
 
 user_msg = (
     f"Today is {today}. {topic}\n\n"
-    f"Write a well-structured article of at least 400 words. "
-    f"End the content field with this disclaimer: {disclaimer}\n\n"
-    f"Return ONLY this JSON with no extra text:\n"
+    "Write a compelling, well-structured article of at least 500 words. Use headers, bullet points, and engaging storytelling. "
+    f"Always end the content field with this exact disclaimer: {disclaimer}\n\n"
+    "Return ONLY this JSON:\n"
     "{\n"
     f'  "id": "{slug}",\n'
-    '  "title": "<catchy title>",\n'
+    '  "title": "<catchy engaging title>",\n'
     f'  "slug": "{slug}",\n'
-    '  "excerpt": "<max 200 chars summary>",\n'
+    '  "excerpt": "<compelling summary under 200 chars>",\n'
     '  "content": "<full article in markdown, use \\n for newlines>",\n'
-    '  "category": "<one of: News, Ecosystem, Community, Game Updates, Guides, Announcements>",\n'
+    f'  "category": "{category}",\n'
     '  "author": "HYDRA AI",\n'
     f'  "date": "{today}",\n'
     '  "readingTime": 5,\n'
@@ -90,6 +128,7 @@ MODELS = [
 ]
 
 response_data = None
+content = ""
 
 for model in MODELS:
     print(f"Trying model: {model}")
@@ -99,8 +138,8 @@ for model in MODELS:
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg}
         ],
-        "temperature": 0.85,
-        "max_tokens": 2500
+        "temperature": 0.9,
+        "max_tokens": 3000
     }).encode()
 
     req = urllib.request.Request(
@@ -118,9 +157,8 @@ for model in MODELS:
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read())
 
-        print(f"Full response: {json.dumps(data)[:300]}")
+        print(f"Response preview: {json.dumps(data)[:200]}")
 
-        # Extract content safely - handle null content (reasoning models)
         msg = data.get("choices", [{}])[0].get("message", {})
         content = msg.get("content") or msg.get("reasoning") or ""
 
@@ -128,26 +166,26 @@ for model in MODELS:
             print(f"Model {model} returned empty content, trying next...")
             continue
 
-        response_data = data
         content = content.strip()
-        print(f"Success with model: {model} ({len(content)} chars)")
+        response_data = data
+        print(f"Success with {model} ({len(content)} chars)")
         break
 
     except urllib.error.HTTPError as e:
         body = e.read().decode()
-        print(f"Model {model} failed: {e.code} - {body}")
+        print(f"Model {model} failed: {e.code} - {body[:200]}")
         continue
 
 if not response_data or not content:
-    print("All models failed or returned empty. Exiting.")
+    print("All models failed. Exiting.")
     sys.exit(1)
 
-# Strip markdown fences if model wraps response
+# Strip markdown fences
 if content.startswith("```"):
     lines = content.split("\n")
     content = "\n".join(lines[1:-1]).strip()
 
-# Find JSON block if there's extra text around it
+# Extract JSON block even if surrounded by text
 if not content.startswith("{"):
     start = content.find("{")
     end = content.rfind("}") + 1
@@ -162,10 +200,31 @@ except json.JSONDecodeError as e:
     print(f"Raw content: {content[:500]}")
     sys.exit(1)
 
+# Save post file
 os.makedirs("src/data/posts", exist_ok=True)
 out_path = f"src/data/posts/{slug}.json"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(post, f, indent=2, ensure_ascii=False)
+print(f"Saved: {out_path}")
+
+# Update public/posts-index.json so the frontend can load posts dynamically
+index_path = "public/posts-index.json"
+existing = []
+if os.path.exists(index_path):
+    with open(index_path, "r", encoding="utf-8") as f:
+        try:
+            existing = json.load(f)
+        except Exception:
+            existing = []
+
+# Add new post to index (avoid duplicates)
+existing = [p for p in existing if p.get("slug") != post["slug"]]
+existing.insert(0, post)
+
+os.makedirs("public", exist_ok=True)
+with open(index_path, "w", encoding="utf-8") as f:
+    json.dump(existing, f, indent=2, ensure_ascii=False)
+print(f"Updated index: {index_path} ({len(existing)} posts)")
 
 print(f"SUCCESS:{out_path}")
 print(f"SLUG:{slug}")
