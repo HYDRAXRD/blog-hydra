@@ -82,15 +82,17 @@ user_msg = (
     "}"
 )
 
-# Try models in order until one works
+# openrouter/free automatically picks an available free model
+# Fallbacks in case the router itself is unavailable
 MODELS = [
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
-    "google/gemma-3-27b-it:free",
+    "openrouter/free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-31b-it:free",
+    "openai/gpt-oss-20b:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
 ]
 
 response_data = None
-used_model = None
 
 for model in MODELS:
     print(f"Trying model: {model}")
@@ -118,7 +120,6 @@ for model in MODELS:
     try:
         with urllib.request.urlopen(req) as resp:
             response_data = json.loads(resp.read())
-            used_model = model
             print(f"Success with model: {model}")
             break
     except urllib.error.HTTPError as e:
@@ -131,7 +132,7 @@ if not response_data:
     sys.exit(1)
 
 content = response_data["choices"][0]["message"]["content"].strip()
-print(f"Raw response length: {len(content)} chars")
+print(f"Response length: {len(content)} chars")
 
 # Strip markdown fences if model wraps response
 if content.startswith("```"):
@@ -143,7 +144,7 @@ try:
     post = json.loads(content)
 except json.JSONDecodeError as e:
     print(f"JSON parse error: {e}")
-    print(f"Content was: {content[:500]}")
+    print(f"Raw content: {content[:500]}")
     sys.exit(1)
 
 os.makedirs("src/data/posts", exist_ok=True)
