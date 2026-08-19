@@ -1,24 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+
+/** Deterministic pseudo-random so SSR and client markup match exactly. */
+const rand = (seed: number) => {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+};
 
 const Particles = ({ count = 30 }: { count?: number }) => {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   const particles = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
         id: i,
-        left: `${Math.random() * 100}%`,
-        delay: `${Math.random() * 8}s`,
-        duration: `${6 + Math.random() * 8}s`,
-        size: `${2 + Math.random() * 4}px`,
-        opacity: 0.3 + Math.random() * 0.5,
+        left: `${(rand(i + 1) * 100).toFixed(2)}%`,
+        delay: `${(rand(i + 101) * 8).toFixed(2)}s`,
+        duration: `${(6 + rand(i + 201) * 8).toFixed(2)}s`,
+        size: `${(2 + rand(i + 301) * 4).toFixed(2)}px`,
+        opacity: Number((0.3 + rand(i + 401) * 0.5).toFixed(2)),
       })),
     [count],
   );
-
-  if (!mounted) return null;
-
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
