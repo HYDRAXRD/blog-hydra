@@ -1,6 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const Particles = ({ count = 30 }: { count?: number }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const particles = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
@@ -13,6 +16,9 @@ const Particles = ({ count = 30 }: { count?: number }) => {
       })),
     [count],
   );
+
+  if (!mounted) return null;
+
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
