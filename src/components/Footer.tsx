@@ -36,7 +36,7 @@ const Footer = () => {
                 <a href="https://hydraxrd.com/track" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary">HydraTrack</a>
               </li>
               <li>
-                <Link to="/blog" className="transition-colors hover:text-primary">HydraBlog</Link>
+                <Link to="/" className="transition-colors hover:text-primary">HydraBlog</Link>
               </li>
             </ul>
           </div>

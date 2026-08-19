@@ -44,7 +44,7 @@ const PostCard = ({ post, featured = false }: { post: Post; featured?: boolean }
             featured ? "text-2xl md:text-3xl" : "text-lg"
           }`}
         >
-          <Link to="/blog/$slug" params={{ slug: post.slug }}>
+          <Link to="/$slug" params={{ slug: post.slug }}>
             {post.title}
           </Link>
         </h3>

@@ -8,7 +8,7 @@ import Comments from "@/components/Comments";
 import { formatDate, getPostBySlug, getRelatedPosts } from "@/data/posts";
 import { SITE_URL, SITE_NAME } from "@/lib/siteConfig";
 
-export const Route = createFileRoute("/blog/$slug")({
+export const Route = createFileRoute("/$slug")({
   loader: ({ params }) => {
     const post = getPostBySlug(params.slug);
     if (!post) throw notFound();
@@ -32,7 +32,6 @@ export const Route = createFileRoute("/blog/$slug")({
         { title: `${post.title} — ${SITE_NAME}` },
         { name: "description", content: post.excerpt },
         { name: "robots", content: "index, follow" },
-        // Open Graph
         { property: "og:type", content: "article" },
         { property: "og:url", content: canonicalUrl },
         { property: "og:title", content: post.title },
@@ -45,13 +44,11 @@ export const Route = createFileRoute("/blog/$slug")({
               { property: "og:image:height", content: "630" },
             ]
           : []),
-        // Twitter
         { name: "twitter:card", content: "summary_large_image" },
         { name: "twitter:site", content: "@HYDRAXRD" },
         { name: "twitter:title", content: post.title },
         { name: "twitter:description", content: post.excerpt },
         ...(ogImage ? [{ name: "twitter:image", content: ogImage }] : []),
-        // Article meta
         { property: "article:published_time", content: post.date },
         { property: "article:author", content: "HYDRA" },
         { property: "article:section", content: post.category },
@@ -112,7 +109,7 @@ function ArticleNotFound() {
           This story doesn't exist or hasn't been published yet.
         </p>
         <Link
-          to="/blog"
+          to="/"
           className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90"
         >
           <ArrowLeft size={16} /> Back to the blog
@@ -135,7 +132,7 @@ function ArticlePage() {
         </div>
         <div className="container-hydra relative z-10 max-w-3xl py-14">
           <Link
-            to="/blog"
+            to="/"
             className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-primary"
           >
             <ArrowLeft size={14} /> All articles

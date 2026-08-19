@@ -18,7 +18,7 @@ const Navbar = () => {
   return (
     <nav className="fixed top-0 right-0 left-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="container-hydra flex h-16 items-center justify-between">
-        <Link to="/blog" className="flex items-center gap-2 transition-transform hover:scale-105">
+        <Link to="/" className="flex items-center gap-2 transition-transform hover:scale-105">
           <img src={hydraLogo} alt="HYDRA logo" className="h-10 w-10 object-contain" />
           <span className="font-display text-lg font-bold text-glow">HYDRA</span>
           <span className="hidden font-display text-lg font-bold text-accent text-glow-green sm:inline">
@@ -37,7 +37,7 @@ const Navbar = () => {
             </a>
           ))}
           <Link
-            to="/blog"
+            to="/"
             className="text-sm font-medium text-primary transition-colors hover:text-accent"
           >
             Blog
