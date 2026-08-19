@@ -1,33 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Static pages -->
   <url>
     <loc>https://hydraxrd.com/blog</loc>
     <lastmod>2026-08-19</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
+
+  <url>
+    <loc>https://hydraxrd.com/blog/post/wif-hat-wearing-dog-solana-memecoin-phenomenon</loc>
+    <lastmod>2026-08-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
   <url>
     <loc>https://hydraxrd.com/blog/post/floki-vikings-rise-memecoin-defi-suite-and-global-marketing</loc>
     <lastmod>2026-08-19</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
+
   <url>
     <loc>https://hydraxrd.com/blog/post/hydra-on-radix-dlt-the-community-memecoin-burning-its-way-up</loc>
     <lastmod>2026-08-19</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
+
   <url>
     <loc>https://hydraxrd.com/blog/post/shiba-inu-deep-dive</loc>
     <lastmod>2026-08-19</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
+
   <url>
     <loc>https://hydraxrd.com/blog/post/welcome-to-hydra-chronicles</loc>
     <lastmod>2026-08-18</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.8</priority>
   </url>
+
 </urlset>
