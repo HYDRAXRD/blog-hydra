@@ -21,6 +21,26 @@ except FileNotFoundError:
     HYDRA_FACTS = ""
     print("WARNING: hydra-facts.md not found")
 
+
+def format_price(price):
+    """Format a crypto price as a human-readable decimal string, never scientific notation."""
+    if price is None or price == "N/A":
+        return "N/A"
+    try:
+        price = float(price)
+    except (ValueError, TypeError):
+        return str(price)
+    if price >= 1:
+        return f"{price:,.2f}"
+    # Count significant decimal places needed
+    if price >= 0.01:
+        return f"{price:.4f}"
+    # For very small prices, find how many zeros after decimal point
+    formatted = f"{price:.10f}".rstrip("0")
+    # Ensure at least 2 significant digits after leading zeros
+    return formatted
+
+
 def fetch_coingecko_news(coin_id="bitcoin"):
     try:
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false"
@@ -36,6 +56,7 @@ def fetch_coingecko_news(coin_id="bitcoin"):
         print(f"CoinGecko fetch failed for {coin_id}: {e}")
         return {}
 
+
 def fetch_trending_coins():
     try:
         url = "https://api.coingecko.com/api/v3/search/trending"
@@ -47,6 +68,7 @@ def fetch_trending_coins():
     except Exception as e:
         print(f"Trending fetch failed: {e}")
         return []
+
 
 IMAGE_PROMPTS = {
     "HYDRA": "minimalist dark crypto blog banner, six-headed dragon silhouette in deep blue neon outline, clean black background, no text, professional web3 aesthetic",
@@ -60,7 +82,7 @@ IMAGE_PROMPTS = {
     "WIF": "minimalist dark crypto banner, small dog silhouette wearing a hat, purple solana-toned background, professional web3 aesthetic, no text",
     "dogwifhat": "minimalist dark crypto banner, small dog silhouette wearing a hat, purple solana-toned background, professional web3 aesthetic, no text",
     "BONK": "minimalist dark crypto banner, orange dog with bat icon, solana purple tones, dark background, professional web3 aesthetic, no text",
-    "FLOKI": "minimalist dark crypto banner, viking helmet and shield silhouette, dark dramatic background, professional web3 aesthetic, no text",
+    "FLOKI": "dark cinematic crypto banner, fierce golden viking warrior helmet with glowing amber Norse runes, dramatic dark background, atmospheric fog, no text, professional web3 aesthetic, ultra detailed",
     "memecoin": "minimalist dark crypto banner, rocket silhouette with coin trail, dark cosmic background, professional web3 aesthetic, no text",
     "market": "minimalist dark crypto banner, glowing candlestick chart lines, dark background, professional web3 aesthetic, no text",
     "DeFi": "minimalist dark crypto banner, interconnected blockchain nodes in blue, dark background, professional web3 aesthetic, no text",
@@ -121,8 +143,19 @@ if image_key in coin_map:
     print(f"Fetching CoinGecko data for {coin_map[image_key]}...")
     cg_data = fetch_coingecko_news(coin_map[image_key])
     if cg_data:
-        market_context = f"\nReal Market Data (CoinGecko, fetched now):\nCurrent price: ${cg_data.get('price_usd', 'N/A')}\n24h change: {cg_data.get('change_24h', 'N/A')}%\nMarket cap: ${cg_data.get('market_cap_usd', 'N/A')} USD\n"
-        print(f"CoinGecko data: {cg_data}")
+        price_formatted = format_price(cg_data.get("price_usd", "N/A"))
+        change_raw = cg_data.get("change_24h", "N/A")
+        try:
+            change_formatted = f"{float(change_raw):.2f}"
+        except (ValueError, TypeError):
+            change_formatted = str(change_raw)
+        market_context = (
+            f"\nReal Market Data (CoinGecko, fetched now):\n"
+            f"Current price: ${price_formatted}\n"
+            f"24h change: {change_formatted}%\n"
+            f"Market cap: ${cg_data.get('market_cap_usd', 'N/A')} USD\n"
+        )
+        print(f"CoinGecko data (formatted): price=${price_formatted}, 24h={change_formatted}%")
 
 if image_key == "market":
     trending = fetch_trending_coins()
@@ -184,6 +217,7 @@ system_msg = (
     "4. ALL links must be masked as markdown hyperlinks using the format [visible text](url). NEVER show a raw URL.\n"
     "5. Write in a natural, human tone. Avoid sounding like AI. No robotic transitions like 'Furthermore', 'Moreover', 'In conclusion'.\n"
     "6. You NEVER invent statistics, prices, or claims not provided to you.\n"
+    "7. PRICE FORMATTING: When writing any crypto price, ALWAYS use standard decimal notation (e.g. $0.00002083). NEVER use scientific notation (e.g. 2.079e-05). NEVER use more than 2 decimal places for percentages (e.g. 3.98%, never 3.98116%).\n"
     "Return ONLY a raw JSON object. No markdown fences. No extra text."
 )
 
@@ -195,6 +229,7 @@ user_msg = (
     "Use ## section headers and bold text for emphasis. "
     "NO bullet points, NO dashes, NO ### headers. Write in flowing paragraphs only. "
     "ALL links must be [text](url) format, never raw URLs. "
+    "IMPORTANT: Write all crypto prices in standard decimal notation (e.g. $0.00002083), NEVER scientific notation. Round percentages to 2 decimal places. "
     "Only use facts provided or widely established public knowledge. "
     f"End the content field with this exact disclaimer: {disclaimer}\n\n"
     "Return ONLY this JSON:\n"
@@ -202,8 +237,8 @@ user_msg = (
     f'  "id": "{slug}",\n'
     '  "title": "<catchy engaging title>",\n'
     f'  "slug": "{slug}",\n'
-    '  "excerpt": "<compelling summary under 200 chars>",\n'
-    '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words, NO bullet points, NO dashes, NO ### headers, ALL links masked>",\n'
+    '  "excerpt": "<compelling summary under 200 chars, prices in decimal notation only>",\n'
+    '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words, NO bullet points, NO dashes, NO ### headers, ALL links masked, prices always in decimal notation>",\n'
     f'  "category": "{category}",\n'
     '  "author": "HYDRA",\n'
     f'  "date": "{today}",\n'
