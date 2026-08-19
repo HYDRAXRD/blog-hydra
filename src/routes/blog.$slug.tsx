@@ -202,6 +202,8 @@ function ArticlePage() {
             ))}
           </div>
         )}
+
+        <Comments slug={post.slug} />
       </main>
 
       {related.length > 0 && (
