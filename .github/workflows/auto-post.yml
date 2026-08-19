@@ -2,9 +2,30 @@ name: AI Auto Blog Post
 
 on:
   schedule:
-    - cron: '0 11 * * *'  # 8:00 AM Brasilia
-    - cron: '0 17 * * *'  # 2:00 PM Brasilia
-    - cron: '0 23 * * *'  # 8:00 PM Brasilia
+    # === FASE 1: Semanas 1-2 (3 posts/dia) ===
+    # Ativo sempre - horarios base
+    - cron: '0 11 * * *'   # 08:00 Brasilia
+    - cron: '0 17 * * *'   # 14:00 Brasilia
+    - cron: '0 23 * * *'   # 20:00 Brasilia
+
+    # === FASE 2: Semanas 3-4 (+ 2 posts extras = 5/dia) ===
+    # Ativo a partir de 02/09/2026
+    - cron: '0 7 2-30 9 *'   # 04:00 Brasilia - setembro em diante
+    - cron: '0 14 2-30 9 *'  # 11:00 Brasilia - setembro em diante
+
+    # === FASE 3: Mes 2+ (+ 3 posts extras = 8/dia) ===
+    # Ativo a partir de 19/09/2026
+    - cron: '0 2 19-30 9 *'   # 23:00 Brasilia - a partir de 19/09
+    - cron: '0 5 19-30 9 *'   # 02:00 Brasilia - a partir de 19/09
+    - cron: '0 20 19-30 9 *'  # 17:00 Brasilia - a partir de 19/09
+
+    # Outubro em diante: 8 posts/dia completo
+    - cron: '0 2 * 10-12 *'   # 23:00 Brasilia
+    - cron: '0 5 * 10-12 *'   # 02:00 Brasilia
+    - cron: '0 7 * 10-12 *'   # 04:00 Brasilia
+    - cron: '0 14 * 10-12 *'  # 11:00 Brasilia
+    - cron: '0 20 * 10-12 *'  # 17:00 Brasilia
+
   workflow_dispatch:
 
 permissions:
