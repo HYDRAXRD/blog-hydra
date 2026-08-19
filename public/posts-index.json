@@ -26,17 +26,17 @@
     "tags": ["hydra", "radix", "memecoin"]
   },
   {
-    "id": "shiba-inu-deep-dive-2026-08-19",
-    "title": "Shiba Inu Deep Dive",
-    "slug": "shiba-inu-deep-dive-2026-08-19",
-    "excerpt": "A deep dive into Shiba Inu (SHIB): the DOGE killer narrative, ShibArmy, Vitalik Buterin burn event, and Shibarium launch.",
-    "category": "Moonshots",
+    "id": "shiba-inu-deep-dive",
+    "title": "The Rise of Shiba Inu: From Doge's Shadow to Memecoin Empire",
+    "slug": "shiba-inu-deep-dive",
+    "excerpt": "Explore Shiba Inu's journey: its 2020 launch, ShibArmy community, aggressive burn mechanism, and meteoric rise as a memecoin giant.",
+    "category": "Memecoin",
     "author": "HYDRA",
     "date": "2026-08-19",
-    "readingTime": 6,
+    "readingTime": 5,
     "featured": false,
-    "coverImage": "",
-    "tags": ["shib", "shiba", "memecoin"]
+    "coverImage": "https://image.pollinations.ai/prompt/a%20cute%20shiba%20inu%20dog%20wearing%20a%20red%20cape%20as%20crypto%20superhero%2C%20surrounded%20by%20burning%20SHIB%20coins%2C%20neon%20cityscape%20background%2C%20vibrant%20anime-style%20digital%20art%2C%204k?width=1200&height=630&nologo=true&seed=42731",
+    "tags": ["shiba", "shib", "memecoin", "history"]
   },
   {
     "id": "welcome-to-hydra-chronicles",
