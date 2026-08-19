@@ -10,7 +10,7 @@ import { SITE_URL } from "@/lib/siteConfig";
 
 // Route registered WITHOUT trailing slash so it matches both
 // hydraxrd.com/blog  and  hydraxrd.com/blog/  (router normalises the latter)
-export const Route = createFileRoute("/blog")({
+export const Route = createFileRoute("/blog/")({
   head: () => ({
     meta: [
       { title: "HYDRA Blog — Meme Coin News, Moonshots & Market Analysis" },

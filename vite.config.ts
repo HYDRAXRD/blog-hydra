@@ -15,4 +15,10 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Cloudflare Pages needs Nitro's Pages layout: static files and the SSR
+  // Worker are emitted together in `dist` (`dist/_worker.js`). The wrapper's
+  // default (`cloudflare-module`) instead targets a standalone Worker.
+  nitro: {
+    preset: "cloudflare-pages",
+  },
 });
