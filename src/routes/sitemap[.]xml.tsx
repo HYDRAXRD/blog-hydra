@@ -5,7 +5,14 @@ import { SITE_URL } from "@/lib/siteConfig";
 export const Route = createFileRoute("/sitemap.xml")({
   loader: () => {
     const posts = sortedPosts();
-    const staticPages = [
+    type SitemapEntry = {
+      url: string;
+      priority: string;
+      changefreq: string;
+      lastmod?: string;
+    };
+
+    const staticPages: SitemapEntry[] = [
       { url: `${SITE_URL}/`, priority: "1.0", changefreq: "daily" },
       { url: `${SITE_URL}/blog`, priority: "0.9", changefreq: "hourly" },
     ];
