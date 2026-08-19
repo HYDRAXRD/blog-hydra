@@ -1,7 +1,0 @@
-name = "blog-hydra"
-main = "dist/_worker.js/index.js"
-compatibility_date = "2024-08-19"
-compatibility_flags = ["nodejs_compat"]
-
-[assets]
-directory = "dist"
