@@ -1,7 +1,9 @@
 import os
 import json
 import urllib.request
+import urllib.error
 from datetime import date
+import sys
 
 today = date.today().isoformat()
 day = date.today().weekday()  # 0=Monday, 6=Sunday
@@ -80,31 +82,56 @@ user_msg = (
     "}"
 )
 
-payload = json.dumps({
-    "model": "google/gemini-2.0-flash-exp:free",
-    "messages": [
-        {"role": "system", "content": system_msg},
-        {"role": "user", "content": user_msg}
-    ],
-    "temperature": 0.85,
-    "max_tokens": 2500
-}).encode()
+# Try models in order until one works
+MODELS = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+    "google/gemma-3-27b-it:free",
+]
 
-req = urllib.request.Request(
-    "https://openrouter.ai/api/v1/chat/completions",
-    data=payload,
-    headers={
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://hydraxrd.com",
-        "X-Title": "HYDRA Blog"
-    }
-)
+response_data = None
+used_model = None
 
-with urllib.request.urlopen(req) as resp:
-    data = json.loads(resp.read())
+for model in MODELS:
+    print(f"Trying model: {model}")
+    payload = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg}
+        ],
+        "temperature": 0.85,
+        "max_tokens": 2500
+    }).encode()
 
-content = data["choices"][0]["message"]["content"].strip()
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://hydraxrd.com",
+            "X-Title": "HYDRA Blog"
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(req) as resp:
+            response_data = json.loads(resp.read())
+            used_model = model
+            print(f"Success with model: {model}")
+            break
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"Model {model} failed: {e.code} - {body}")
+        continue
+
+if not response_data:
+    print("All models failed. Exiting.")
+    sys.exit(1)
+
+content = response_data["choices"][0]["message"]["content"].strip()
+print(f"Raw response length: {len(content)} chars")
 
 # Strip markdown fences if model wraps response
 if content.startswith("```"):
@@ -112,7 +139,12 @@ if content.startswith("```"):
     content = "\n".join(lines[1:-1]).strip()
 
 # Validate JSON
-post = json.loads(content)
+try:
+    post = json.loads(content)
+except json.JSONDecodeError as e:
+    print(f"JSON parse error: {e}")
+    print(f"Content was: {content[:500]}")
+    sys.exit(1)
 
 os.makedirs("src/data/posts", exist_ok=True)
 out_path = f"src/data/posts/{slug}.json"
