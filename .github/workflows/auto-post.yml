@@ -2,27 +2,19 @@ name: AI Auto Blog Post
 
 on:
   schedule:
-    # === FASE 1: Semanas 1-2 (3 posts/dia) ===
     - cron: '0 11 * * *'   # 08:00 Brasilia
     - cron: '0 17 * * *'   # 14:00 Brasilia
     - cron: '0 23 * * *'   # 20:00 Brasilia
-
-    # === FASE 2: Semanas 3-4 (+ 2 posts extras = 5/dia) ===
-    - cron: '0 7 2-30 9 *'   # 04:00 Brasilia - setembro em diante
-    - cron: '0 14 2-30 9 *'  # 11:00 Brasilia - setembro em diante
-
-    # === FASE 3: Mes 2+ (+ 3 posts extras = 8/dia) ===
-    - cron: '0 2 19-30 9 *'   # 23:00 Brasilia
-    - cron: '0 5 19-30 9 *'   # 02:00 Brasilia
-    - cron: '0 20 19-30 9 *'  # 17:00 Brasilia
-
-    # Outubro em diante: 8 posts/dia completo
+    - cron: '0 7 2-30 9 *'
+    - cron: '0 14 2-30 9 *'
+    - cron: '0 2 19-30 9 *'
+    - cron: '0 5 19-30 9 *'
+    - cron: '0 20 19-30 9 *'
     - cron: '0 2 * 10-12 *'
     - cron: '0 5 * 10-12 *'
     - cron: '0 7 * 10-12 *'
     - cron: '0 14 * 10-12 *'
     - cron: '0 20 * 10-12 *'
-
   workflow_dispatch:
 
 permissions:
@@ -44,36 +36,46 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           set -e
-          python3 .github/scripts/generate_post.py | tee /tmp/out.txt
-          SLUG=$(grep 'SLUG:' /tmp/out.txt | cut -d: -f2 | tr -d ' ')
+          python3 .github/scripts/generate_post.py | tee /tmp/gen.txt
+          SLUG=$(grep 'SLUG:' /tmp/gen.txt | cut -d: -f2 | tr -d ' ')
+          POST_FILE=$(grep 'SUCCESS:' /tmp/gen.txt | cut -d: -f2 | tr -d ' ')
           echo "slug=$SLUG" >> $GITHUB_OUTPUT
-          echo "Generated slug: $SLUG"
+          echo "post_file=$POST_FILE" >> $GITHUB_OUTPUT
+          echo "Generated: $POST_FILE"
 
       - name: Commit and push post
+        env:
+          POST_FILE: ${{ steps.generate.outputs.post_file }}
+          SLUG: ${{ steps.generate.outputs.slug }}
         run: |
+          set -e
+
+          # Backup dos arquivos gerados ANTES de qualquer operacao git
+          cp "$POST_FILE" /tmp/new-post.json
+          cp public/posts-index.json /tmp/posts-index.json
+          echo "Backed up: $POST_FILE"
+
           git config user.name "HYDRA AI Bot"
           git config user.email "bot@hydraxrd.com"
 
-          # Salva os novos arquivos gerados
-          NEW_POST=$(ls src/data/posts/post-*.json 2>/dev/null | tail -1)
-          cp public/posts-index.json /tmp/posts-index-new.json
-          [ -n "$NEW_POST" ] && cp "$NEW_POST" /tmp/new-post.json
-
-          # Sincroniza com remoto
+          # Sincroniza com remoto (sem --rebase, sem stash)
           git fetch origin main
           git reset --hard origin/main
 
-          # Restaura os arquivos gerados sobre o estado atualizado
-          cp /tmp/posts-index-new.json public/posts-index.json
-          [ -f /tmp/new-post.json ] && cp /tmp/new-post.json "$NEW_POST"
+          # Restaura os arquivos gerados
+          mkdir -p src/data/posts public
+          cp /tmp/new-post.json "$POST_FILE"
+          cp /tmp/posts-index.json public/posts-index.json
+          echo "Restored: $POST_FILE"
 
-          git add src/data/posts/ public/posts-index.json
+          git add "$POST_FILE" public/posts-index.json
+          git status
 
           if git diff --cached --quiet; then
             echo "Nothing to commit, skipping"
             exit 0
           fi
 
-          git commit -m "Auto post: ${{ steps.generate.outputs.slug }}"
+          git commit -m "Auto post: $SLUG"
           git push origin main
-          echo "Post pushed - Cloudflare deploy triggered automatically"
+          echo "SUCCESS: post pushed, Cloudflare deploy triggered"
