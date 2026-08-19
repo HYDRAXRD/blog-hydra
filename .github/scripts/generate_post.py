@@ -2,19 +2,17 @@ import os
 import json
 import urllib.request
 import urllib.error
+import urllib.parse
 from datetime import datetime, timezone
 import sys
 import random
 
 now = datetime.now(timezone.utc)
 today = now.strftime("%Y-%m-%d")
-hour = now.hour  # 11=morning, 17=afternoon, 23=evening UTC
+hour = now.hour
 api_key = os.environ["OPENROUTER_API_KEY"]
-
-# Unique slug per post using timestamp
 timestamp = now.strftime("%Y-%m-%d-%H")
 
-# Topic pools - randomly selected each run for variety
 HYDRA_TOPICS = [
     "Write about the HYDRA ecosystem on Radix DLT. Cover one of: HydraSwap DEX, HydraBurn token burn mechanics, HydraBattleArena game, HYDRA staking rewards, or community governance. Be energetic and hype-driven.",
     "Write about why HYDRA on Radix DLT is positioned to be the next big memecoin. Cover Radix's unique tech advantages, HYDRA tokenomics, and community growth.",
@@ -40,28 +38,23 @@ MARKET_TOPICS = [
     "Write about the psychology of memecoin investing: FOMO, diamond hands, paper hands, and how emotion drives 10x moves.",
 ]
 
-# Rotate topic pools by hour to ensure variety across 3 daily posts
-if hour < 13:  # Morning post
+if hour < 13:
     pool = HYDRA_TOPICS
-    post_type = "morning"
-elif hour < 20:  # Afternoon post
+elif hour < 20:
     pool = MEMECOIN_TOPICS
-    post_type = "afternoon"
-else:  # Evening post
+else:
     pool = MARKET_TOPICS + MEMECOIN_TOPICS
-    post_type = "evening"
 
 topic = random.choice(pool)
 slug = f"post-{timestamp}"
 
-# Assign category based on topic pool
 if pool == HYDRA_TOPICS:
     category = random.choice(["Ecosystem", "Community", "News"])
 elif "guide" in topic.lower() or "how to" in topic.lower() or "spot" in topic.lower():
     category = "Guides"
 elif "analysis" in topic.lower() or "market" in topic.lower():
     category = "News"
-elif "story" in topic.lower() or "deep dive" in topic.lower() or "history" in topic.lower():
+elif "story" in topic.lower() or "deep dive" in topic.lower():
     category = "Announcements"
 else:
     category = "Community"
@@ -76,11 +69,8 @@ tags_map = {
     "FLOKI": ["floki", "memecoin", "defi"],
     "market": ["market", "analysis", "crypto"],
     "guide": ["guide", "memecoin", "crypto"],
-    "spot": ["guide", "memecoin", "tips"],
     "risks": ["risk", "safety", "memecoin"],
     "psychology": ["psychology", "trading", "memecoin"],
-    "memes": ["meme", "culture", "community"],
-    "millionaires": ["memecoin", "history", "doge"],
     "DeFi": ["defi", "radix", "blockchain"],
 }
 tags = ["memecoin", "crypto"]
@@ -103,6 +93,7 @@ user_msg = (
     f"Today is {today}. {topic}\n\n"
     "Write a compelling, well-structured article of at least 500 words. Use headers, bullet points, and engaging storytelling. "
     f"Always end the content field with this exact disclaimer: {disclaimer}\n\n"
+    "Also return an 'imagePrompt' field: a short vivid English description (max 15 words) of a cinematic crypto illustration for this article. Example: 'golden dogecoin rocket launching to the moon, neon cyberpunk city background'\n\n"
     "Return ONLY this JSON:\n"
     "{\n"
     f'  "id": "{slug}",\n'
@@ -116,7 +107,8 @@ user_msg = (
     '  "readingTime": 5,\n'
     '  "featured": false,\n'
     '  "coverImage": "",\n'
-    f'  "tags": {json.dumps(tags)}\n'
+    f'  "tags": {json.dumps(tags)},\n'
+    '  "imagePrompt": "<short vivid image description>"\n'
     "}"
 )
 
@@ -156,21 +148,15 @@ for model in MODELS:
     try:
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read())
-
-        print(f"Response preview: {json.dumps(data)[:200]}")
-
         msg = data.get("choices", [{}])[0].get("message", {})
         content = msg.get("content") or msg.get("reasoning") or ""
-
         if not content or not content.strip():
-            print(f"Model {model} returned empty content, trying next...")
+            print(f"Model {model} returned empty, trying next...")
             continue
-
         content = content.strip()
         response_data = data
         print(f"Success with {model} ({len(content)} chars)")
         break
-
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         print(f"Model {model} failed: {e.code} - {body[:200]}")
@@ -180,19 +166,16 @@ if not response_data or not content:
     print("All models failed. Exiting.")
     sys.exit(1)
 
-# Strip markdown fences
 if content.startswith("```"):
     lines = content.split("\n")
     content = "\n".join(lines[1:-1]).strip()
 
-# Extract JSON block even if surrounded by text
 if not content.startswith("{"):
     start = content.find("{")
     end = content.rfind("}") + 1
     if start != -1 and end > start:
         content = content[start:end]
 
-# Validate JSON
 try:
     post = json.loads(content)
 except json.JSONDecodeError as e:
@@ -200,14 +183,38 @@ except json.JSONDecodeError as e:
     print(f"Raw content: {content[:500]}")
     sys.exit(1)
 
-# Save post file
+# --- Generate cover image via Pollinations.ai ---
+image_prompt = post.pop("imagePrompt", "")
+if not image_prompt:
+    # Fallback prompt based on title
+    image_prompt = f"cinematic crypto illustration for article titled {post.get('title', 'crypto memecoin')}, dark neon background"
+
+# Enhance prompt for better visual quality
+full_image_prompt = f"{image_prompt}, digital art, cinematic lighting, dark background, vibrant colors, 4k, high quality"
+encoded_prompt = urllib.parse.quote(full_image_prompt)
+image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true&seed={random.randint(1, 99999)}"
+
+print(f"Image prompt: {full_image_prompt}")
+print(f"Image URL: {image_url}")
+
+# Test that image URL is reachable
+try:
+    img_req = urllib.request.Request(image_url, method="HEAD")
+    urllib.request.urlopen(img_req, timeout=10)
+    post["coverImage"] = image_url
+    print("Cover image URL set successfully")
+except Exception as e:
+    print(f"Image check failed (using empty): {e}")
+    post["coverImage"] = ""
+
+# Save post
 os.makedirs("src/data/posts", exist_ok=True)
 out_path = f"src/data/posts/{slug}.json"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(post, f, indent=2, ensure_ascii=False)
 print(f"Saved: {out_path}")
 
-# Update public/posts-index.json so the frontend can load posts dynamically
+# Update public/posts-index.json
 index_path = "public/posts-index.json"
 existing = []
 if os.path.exists(index_path):
@@ -217,14 +224,13 @@ if os.path.exists(index_path):
         except Exception:
             existing = []
 
-# Add new post to index (avoid duplicates)
 existing = [p for p in existing if p.get("slug") != post["slug"]]
 existing.insert(0, post)
 
 os.makedirs("public", exist_ok=True)
 with open(index_path, "w", encoding="utf-8") as f:
     json.dump(existing, f, indent=2, ensure_ascii=False)
-print(f"Updated index: {index_path} ({len(existing)} posts)")
+print(f"Index updated: {len(existing)} posts")
 
 print(f"SUCCESS:{out_path}")
 print(f"SLUG:{slug}")
