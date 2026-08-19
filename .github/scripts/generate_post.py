@@ -13,11 +13,9 @@ hour = now.hour
 api_key = os.environ["OPENROUTER_API_KEY"]
 timestamp = now.strftime("%Y-%m-%d-%H")
 
-# Fixed, tested image prompts per topic keyword
-# These are crafted to produce recognizable, high-quality crypto illustrations
 IMAGE_PROMPTS = {
-    "HYDRA": "a fierce glowing hydra dragon made of liquid crypto tokens on Radix DLT blockchain, neon blue and purple energy, dark futuristic background, cinematic digital art, 4k",
-    "HydraSwap": "a futuristic decentralized exchange portal with HYDRA dragon logo, glowing swap arrows, dark neon blue background, crypto DEX interface, cinematic digital art",
+    "HYDRA": "six-headed blue hydra dragon in esports cartoon style, all six heads roaring with green eyes and sharp white fangs, metallic blue scales, black background with glowing blue neon ring border, circular badge composition, vibrant digital art, 4k",
+    "HydraSwap": "six-headed blue hydra dragon mascot inside a glowing crypto DEX swap portal, neon blue energy arrows swirling, dark futuristic background, esports cartoon style, vibrant digital art, 4k",
     "Dogecoin": "the iconic shiba inu Doge meme dog wearing a gold astronaut helmet flying on a rocket to the moon, coins raining, neon night sky, vibrant digital art, 4k",
     "DOGE": "the iconic shiba inu Doge meme dog wearing a gold astronaut helmet flying on a rocket to the moon, coins raining, neon night sky, vibrant digital art, 4k",
     "Shiba": "a cute shiba inu dog wearing a red cape as crypto superhero, surrounded by burning SHIB coins, neon cityscape background, vibrant anime-style digital art, 4k",
@@ -30,7 +28,7 @@ IMAGE_PROMPTS = {
     "FLOKI": "a viking warrior shiba inu dog in Norse armor holding a crypto coin shield, dramatic northern lights background, epic cinematic digital art, 4k",
     "memecoin": "a rocket ship made of meme coin logos (doge, shib, pepe) blasting through a neon galaxy, epic cinematic digital art, vibrant colors, dark space background, 4k",
     "market": "a futuristic crypto trading floor with glowing green and red candles, holographic price charts, dark cyberpunk environment, cinematic digital art, 4k",
-    "DeFi": "an intricate network of glowing blockchain nodes connecting across a dark digital universe, Radix DLT logo at center, deep blue neon tones, cinematic art, 4k",
+    "DeFi": "an intricate network of glowing blockchain nodes connecting across a dark digital universe, deep blue neon tones, cinematic art, 4k",
     "Radix": "the Radix DLT blockchain network visualized as glowing blue interconnected nodes in space, futuristic digital art, deep blue and white, cinematic, 4k",
     "guide": "a glowing treasure map overlaid on crypto charts and coin symbols, adventurer aesthetic, gold and dark blue tones, cinematic digital art, 4k",
     "risks": "a dramatic warning sign made of crypto coins on the edge of a cliff, dark stormy digital art, red warning glow, cinematic crypto illustration, 4k",
@@ -206,7 +204,6 @@ except json.JSONDecodeError as e:
     print(f"Raw content: {content[:500]}")
     sys.exit(1)
 
-# Generate cover image via Pollinations.ai with fixed per-token prompt
 print(f"Image key: {image_key}")
 print(f"Image prompt: {image_prompt}")
 
@@ -215,14 +212,12 @@ image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&h
 post["coverImage"] = image_url
 print(f"Cover image URL: {image_url}")
 
-# Save post
 os.makedirs("src/data/posts", exist_ok=True)
 out_path = f"src/data/posts/{slug}.json"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(post, f, indent=2, ensure_ascii=False)
 print(f"Saved: {out_path}")
 
-# Update public/posts-index.json
 index_path = "public/posts-index.json"
 existing = []
 if os.path.exists(index_path):
