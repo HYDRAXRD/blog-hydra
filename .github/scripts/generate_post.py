@@ -13,29 +13,56 @@ hour = now.hour
 api_key = os.environ["OPENROUTER_API_KEY"]
 timestamp = now.strftime("%Y-%m-%d-%H")
 
+# Fixed, tested image prompts per topic keyword
+# These are crafted to produce recognizable, high-quality crypto illustrations
+IMAGE_PROMPTS = {
+    "HYDRA": "a fierce glowing hydra dragon made of liquid crypto tokens on Radix DLT blockchain, neon blue and purple energy, dark futuristic background, cinematic digital art, 4k",
+    "HydraSwap": "a futuristic decentralized exchange portal with HYDRA dragon logo, glowing swap arrows, dark neon blue background, crypto DEX interface, cinematic digital art",
+    "Dogecoin": "the iconic shiba inu Doge meme dog wearing a gold astronaut helmet flying on a rocket to the moon, coins raining, neon night sky, vibrant digital art, 4k",
+    "DOGE": "the iconic shiba inu Doge meme dog wearing a gold astronaut helmet flying on a rocket to the moon, coins raining, neon night sky, vibrant digital art, 4k",
+    "Shiba": "a cute shiba inu dog wearing a red cape as crypto superhero, surrounded by burning SHIB coins, neon cityscape background, vibrant anime-style digital art, 4k",
+    "SHIB": "a cute shiba inu dog wearing a red cape as crypto superhero, surrounded by burning SHIB coins, neon cityscape background, vibrant anime-style digital art, 4k",
+    "Pepe": "the iconic Pepe the Frog wearing a suit sitting on a throne of gold crypto coins, dark moody lighting, meme culture aesthetic, vibrant digital art, 4k",
+    "PEPE": "the iconic Pepe the Frog wearing a suit sitting on a throne of gold crypto coins, dark moody lighting, meme culture aesthetic, vibrant digital art, 4k",
+    "WIF": "an adorable dog wearing a pink knitted hat in space surrounded by Solana purple neon lights, cute digital art, vibrant colors, cosmic background, 4k",
+    "dogwifhat": "an adorable dog wearing a pink knitted hat in space surrounded by Solana purple neon lights, cute digital art, vibrant colors, cosmic background, 4k",
+    "BONK": "a cartoon orange dog with a giant wooden bat smashing downward on crypto chart, Solana purple background, energetic explosive comic style digital art, 4k",
+    "FLOKI": "a viking warrior shiba inu dog in Norse armor holding a crypto coin shield, dramatic northern lights background, epic cinematic digital art, 4k",
+    "memecoin": "a rocket ship made of meme coin logos (doge, shib, pepe) blasting through a neon galaxy, epic cinematic digital art, vibrant colors, dark space background, 4k",
+    "market": "a futuristic crypto trading floor with glowing green and red candles, holographic price charts, dark cyberpunk environment, cinematic digital art, 4k",
+    "DeFi": "an intricate network of glowing blockchain nodes connecting across a dark digital universe, Radix DLT logo at center, deep blue neon tones, cinematic art, 4k",
+    "Radix": "the Radix DLT blockchain network visualized as glowing blue interconnected nodes in space, futuristic digital art, deep blue and white, cinematic, 4k",
+    "guide": "a glowing treasure map overlaid on crypto charts and coin symbols, adventurer aesthetic, gold and dark blue tones, cinematic digital art, 4k",
+    "risks": "a dramatic warning sign made of crypto coins on the edge of a cliff, dark stormy digital art, red warning glow, cinematic crypto illustration, 4k",
+    "psychology": "a human brain made of glowing crypto candlesticks and coins, dark neon blue background, concept art, cinematic digital illustration, 4k",
+    "millionaires": "five golden crypto coins (DOGE SHIB PEPE WIF BONK) on pedestals with trophy glow, dark dramatic background, cinematic digital art, 4k",
+}
+
+DEFAULT_IMAGE_PROMPT = "a dramatic crypto memecoin rocket launching through neon galaxy stars, vibrant digital art, dark space background, glowing coins, cinematic 4k illustration"
+
 HYDRA_TOPICS = [
-    "Write about the HYDRA ecosystem on Radix DLT. Cover one of: HydraSwap DEX, HydraBurn token burn mechanics, HydraBattleArena game, HYDRA staking rewards, or community governance. Be energetic and hype-driven.",
-    "Write about why HYDRA on Radix DLT is positioned to be the next big memecoin. Cover Radix's unique tech advantages, HYDRA tokenomics, and community growth.",
-    "Write a guide on how to buy and hold HYDRA token on Radix DLT. Include wallet setup, where to swap, and why the community is bullish.",
+    ("HYDRA", "Write about the HYDRA ecosystem on Radix DLT. Cover one of: HydraSwap DEX, HydraBurn token burn mechanics, HydraBattleArena game, HYDRA staking rewards, or community governance. Be energetic and hype-driven."),
+    ("HYDRA", "Write about why HYDRA on Radix DLT is positioned to be the next big memecoin. Cover Radix's unique tech advantages, HYDRA tokenomics, and community growth."),
+    ("HYDRA", "Write a guide on how to buy and hold HYDRA token on Radix DLT. Include wallet setup, where to swap, and why the community is bullish."),
 ]
 
 MEMECOIN_TOPICS = [
-    "Write the full story of Dogecoin (DOGE): from joke to $80B market cap. Cover the 2013 origin, Reddit community, Elon Musk tweets, and the 2021 explosion.",
-    "Write a deep dive into Shiba Inu (SHIB): the DOGE killer narrative, ShibArmy, Vitalik Buterin burn, Shibarium launch, and price history.",
-    "Write about Pepe (PEPE) coin: how a 4chan frog became a top-10 memecoin in 2023, the cultural roots, and the community explosion.",
-    "Write about WIF (dogwifhat) on Solana: the hat-wearing dog that hit $4B market cap, the meme origin, and Solana memecoin culture.",
-    "Write about BONK on Solana: the community airdrop that revived Solana in December 2022, how it distributed tokens, and what happened next.",
-    "Write about FLOKI: the Elon Musk dog name inspiration, Viking branding, FlokiFi DeFi suite, and global marketing campaigns.",
-    "Write about the top 5 memecoins that made early holders millionaires: DOGE, SHIB, PEPE, WIF, BONK. What patterns did they share?",
-    "Write a guide: How to spot the next 1000x memecoin before it explodes. Cover community signals, liquidity, tokenomics, and timing.",
-    "Write about memecoin culture: why memes are the most powerful marketing in crypto, community as product, and viral mechanics.",
-    "Write about the risks of memecoins: rug pulls, wash trading, and how to protect yourself while still participating in the upside.",
+    ("Dogecoin", "Write the full story of Dogecoin (DOGE): from joke to $80B market cap. Cover the 2013 origin, Reddit community, Elon Musk tweets, and the 2021 explosion."),
+    ("Shiba", "Write a deep dive into Shiba Inu (SHIB): the DOGE killer narrative, ShibArmy, Vitalik Buterin burn, Shibarium launch, and price history."),
+    ("Pepe", "Write about Pepe (PEPE) coin: how a 4chan frog became a top-10 memecoin in 2023, the cultural roots, and the community explosion."),
+    ("WIF", "Write about WIF (dogwifhat) on Solana: the hat-wearing dog that hit $4B market cap, the meme origin, and Solana memecoin culture."),
+    ("BONK", "Write about BONK on Solana: the community airdrop that revived Solana in December 2022, how it distributed tokens, and what happened next."),
+    ("FLOKI", "Write about FLOKI: the Elon Musk dog name inspiration, Viking branding, FlokiFi DeFi suite, and global marketing campaigns."),
+    ("millionaires", "Write about the top 5 memecoins that made early holders millionaires: DOGE, SHIB, PEPE, WIF, BONK. What patterns did they share?"),
+    ("guide", "Write a guide: How to spot the next 1000x memecoin before it explodes. Cover community signals, liquidity, tokenomics, and timing."),
+    ("memecoin", "Write about memecoin culture: why memes are the most powerful marketing in crypto, community as product, and viral mechanics."),
+    ("risks", "Write about the risks of memecoins: rug pulls, wash trading, and how to protect yourself while still participating in the upside."),
 ]
 
 MARKET_TOPICS = [
-    "Write a market analysis of the current memecoin sector. Discuss Bitcoin dominance, altcoin season signals, and which narratives are trending.",
-    "Write about DeFi on Radix DLT: why Radix's asset-oriented model is superior to EVM, and how HYDRA fits into the ecosystem.",
-    "Write about the psychology of memecoin investing: FOMO, diamond hands, paper hands, and how emotion drives 10x moves.",
+    ("market", "Write a market analysis of the current memecoin sector. Discuss Bitcoin dominance, altcoin season signals, and which narratives are trending."),
+    ("DeFi", "Write about DeFi on Radix DLT: why Radix's asset-oriented model is superior to EVM, and how HYDRA fits into the ecosystem."),
+    ("psychology", "Write about the psychology of memecoin investing: FOMO, diamond hands, paper hands, and how emotion drives 10x moves."),
 ]
 
 if hour < 13:
@@ -45,14 +72,15 @@ elif hour < 20:
 else:
     pool = MARKET_TOPICS + MEMECOIN_TOPICS
 
-topic = random.choice(pool)
+image_key, topic = random.choice(pool)
 slug = f"post-{timestamp}"
+image_prompt = IMAGE_PROMPTS.get(image_key, DEFAULT_IMAGE_PROMPT)
 
 if pool == HYDRA_TOPICS:
     category = random.choice(["Ecosystem", "Community", "News"])
-elif "guide" in topic.lower() or "how to" in topic.lower() or "spot" in topic.lower():
+elif "guide" in image_key or "guide" in topic.lower():
     category = "Guides"
-elif "analysis" in topic.lower() or "market" in topic.lower():
+elif "market" in image_key or "analysis" in topic.lower():
     category = "News"
 elif "story" in topic.lower() or "deep dive" in topic.lower():
     category = "Announcements"
@@ -71,13 +99,10 @@ tags_map = {
     "guide": ["guide", "memecoin", "crypto"],
     "risks": ["risk", "safety", "memecoin"],
     "psychology": ["psychology", "trading", "memecoin"],
+    "millionaires": ["memecoin", "history", "doge"],
     "DeFi": ["defi", "radix", "blockchain"],
 }
-tags = ["memecoin", "crypto"]
-for key, t in tags_map.items():
-    if key.lower() in topic.lower():
-        tags = t
-        break
+tags = tags_map.get(image_key, ["memecoin", "crypto"])
 
 disclaimer = (
     "\n\n---\n\n"
@@ -93,7 +118,6 @@ user_msg = (
     f"Today is {today}. {topic}\n\n"
     "Write a compelling, well-structured article of at least 500 words. Use headers, bullet points, and engaging storytelling. "
     f"Always end the content field with this exact disclaimer: {disclaimer}\n\n"
-    "Also return an 'imagePrompt' field: a short vivid English description (max 15 words) of a cinematic crypto illustration for this article. Example: 'golden dogecoin rocket launching to the moon, neon cyberpunk city background'\n\n"
     "Return ONLY this JSON:\n"
     "{\n"
     f'  "id": "{slug}",\n'
@@ -107,8 +131,7 @@ user_msg = (
     '  "readingTime": 5,\n'
     '  "featured": false,\n'
     '  "coverImage": "",\n'
-    f'  "tags": {json.dumps(tags)},\n'
-    '  "imagePrompt": "<short vivid image description>"\n'
+    f'  "tags": {json.dumps(tags)}\n'
     "}"
 )
 
@@ -183,29 +206,14 @@ except json.JSONDecodeError as e:
     print(f"Raw content: {content[:500]}")
     sys.exit(1)
 
-# --- Generate cover image via Pollinations.ai ---
-image_prompt = post.pop("imagePrompt", "")
-if not image_prompt:
-    # Fallback prompt based on title
-    image_prompt = f"cinematic crypto illustration for article titled {post.get('title', 'crypto memecoin')}, dark neon background"
+# Generate cover image via Pollinations.ai with fixed per-token prompt
+print(f"Image key: {image_key}")
+print(f"Image prompt: {image_prompt}")
 
-# Enhance prompt for better visual quality
-full_image_prompt = f"{image_prompt}, digital art, cinematic lighting, dark background, vibrant colors, 4k, high quality"
-encoded_prompt = urllib.parse.quote(full_image_prompt)
+encoded_prompt = urllib.parse.quote(image_prompt)
 image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true&seed={random.randint(1, 99999)}"
-
-print(f"Image prompt: {full_image_prompt}")
-print(f"Image URL: {image_url}")
-
-# Test that image URL is reachable
-try:
-    img_req = urllib.request.Request(image_url, method="HEAD")
-    urllib.request.urlopen(img_req, timeout=10)
-    post["coverImage"] = image_url
-    print("Cover image URL set successfully")
-except Exception as e:
-    print(f"Image check failed (using empty): {e}")
-    post["coverImage"] = ""
+post["coverImage"] = image_url
+print(f"Cover image URL: {image_url}")
 
 # Save post
 os.makedirs("src/data/posts", exist_ok=True)
