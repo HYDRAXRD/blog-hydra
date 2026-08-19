@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import Particles from "@/components/Particles";
 import PostCard from "@/components/PostCard";
 import { formatDate, getPostBySlug, getRelatedPosts } from "@/data/posts";
+import { SITE_URL, SITE_NAME } from "@/lib/siteConfig";
 
 export const Route = createFileRoute("/blog/$slug")({
   loader: ({ params }) => {
@@ -15,27 +16,46 @@ export const Route = createFileRoute("/blog/$slug")({
   head: ({ params, loaderData }) => {
     if (!loaderData) {
       return {
-        meta: [{ title: "Article not found — HYDRA Blog" }, { name: "robots", content: "noindex" }],
+        meta: [
+          { title: `Article not found — ${SITE_NAME}` },
+          { name: "robots", content: "noindex" },
+        ],
       };
     }
     const { post } = loaderData;
+    const canonicalUrl = `${SITE_URL}/blog/${params.slug}`;
+    const ogImage = post.coverImage?.startsWith("https://") ? post.coverImage : undefined;
+
     return {
       meta: [
-        { title: `${post.title} — HYDRA Blog` },
+        { title: `${post.title} — ${SITE_NAME}` },
         { name: "description", content: post.excerpt },
+        { name: "robots", content: "index, follow" },
+        // Open Graph
+        { property: "og:type", content: "article" },
+        { property: "og:url", content: canonicalUrl },
         { property: "og:title", content: post.title },
         { property: "og:description", content: post.excerpt },
-        { property: "og:type", content: "article" },
-        { property: "og:url", content: `/blog/${params.slug}` },
-        { name: "twitter:card", content: "summary_large_image" },
-        ...(post.coverImage?.startsWith("https://")
+        { property: "og:site_name", content: SITE_NAME },
+        ...(ogImage
           ? [
-              { property: "og:image", content: post.coverImage },
-              { name: "twitter:image", content: post.coverImage },
+              { property: "og:image", content: ogImage },
+              { property: "og:image:width", content: "1200" },
+              { property: "og:image:height", content: "630" },
             ]
           : []),
+        // Twitter
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:site", content: "@HYDRAXRD" },
+        { name: "twitter:title", content: post.title },
+        { name: "twitter:description", content: post.excerpt },
+        ...(ogImage ? [{ name: "twitter:image", content: ogImage }] : []),
+        // Article meta
+        { property: "article:published_time", content: post.date },
+        { property: "article:author", content: "HYDRA" },
+        { property: "article:section", content: post.category },
       ],
-      links: [{ rel: "canonical", href: `/blog/${params.slug}` }],
+      links: [{ rel: "canonical", href: canonicalUrl }],
       scripts: [
         {
           type: "application/ld+json",
@@ -45,9 +65,24 @@ export const Route = createFileRoute("/blog/$slug")({
             headline: post.title,
             description: post.excerpt,
             datePublished: post.date,
-            author: { "@type": "Person", name: post.author },
-            publisher: { "@type": "Organization", name: "HYDRA" },
-            ...(post.coverImage ? { image: post.coverImage } : {}),
+            dateModified: post.date,
+            url: canonicalUrl,
+            author: {
+              "@type": "Person",
+              name: post.author,
+              url: SITE_URL,
+            },
+            publisher: {
+              "@type": "Organization",
+              name: "HYDRA",
+              url: SITE_URL,
+              logo: {
+                "@type": "ImageObject",
+                url: `${SITE_URL}/favicon.png`,
+              },
+            },
+            mainEntityOfPage: canonicalUrl,
+            ...(ogImage ? { image: { "@type": "ImageObject", url: ogImage, width: 1200, height: 630 } } : {}),
           }),
         },
       ],
@@ -142,6 +177,9 @@ function ArticlePage() {
             src={post.coverImage}
             alt={post.title}
             className="w-full rounded-2xl border border-border/60 object-cover box-glow"
+            loading="lazy"
+            width={1200}
+            height={630}
           />
         </div>
       )}

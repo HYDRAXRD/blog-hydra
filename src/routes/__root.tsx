@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "../lib/siteConfig";
 
 function NotFoundComponent() {
   return (
@@ -77,22 +78,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "HYDRA Blog — Meme Coin News" },
-      {
-        name: "description",
-        content: "Meme coin news, moonshots and market analysis from the HYDRA community.",
-      },
+      { title: `${SITE_NAME} — Meme Coin News` },
+      { name: "description", content: SITE_DESCRIPTION },
       { name: "author", content: "HYDRA" },
-      { property: "og:site_name", content: "HYDRA Blog" },
+      { property: "og:site_name", content: SITE_NAME },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: SITE_URL },
+      { property: "og:title", content: `${SITE_NAME} — Meme Coin News` },
+      { property: "og:description", content: SITE_DESCRIPTION },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@HYDRAXRD" },
+      { name: "robots", content: "index, follow" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -100,6 +99,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap",
       },
       { rel: "icon", type: "image/png", href: "/favicon.png" },
+      { rel: "canonical", href: SITE_URL },
     ],
   }),
 
@@ -128,7 +128,6 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </QueryClientProvider>
   );
