@@ -41,7 +41,14 @@ jobs:
           POST_FILE=$(grep 'SUCCESS:' /tmp/gen.txt | cut -d: -f2 | tr -d ' ')
           echo "slug=$SLUG" >> $GITHUB_OUTPUT
           echo "post_file=$POST_FILE" >> $GITHUB_OUTPUT
-          echo "Generated: $POST_FILE"
+          echo "Generated: $POST_FILE (slug: $SLUG)"
+
+          # Backup imediato dos 3 arquivos gerados no mesmo step
+          mkdir -p /tmp/hydra-backup
+          cp "$POST_FILE" /tmp/hydra-backup/new-post.json
+          cp public/posts-index.json /tmp/hydra-backup/posts-index.json
+          cp public/sitemap.xml /tmp/hydra-backup/sitemap.xml
+          echo "Backup OK"
 
       - name: Commit and push post
         env:
@@ -50,25 +57,21 @@ jobs:
         run: |
           set -e
 
-          # Backup dos arquivos gerados ANTES de qualquer operacao git
-          cp "$POST_FILE" /tmp/new-post.json
-          cp public/posts-index.json /tmp/posts-index.json
-          echo "Backed up: $POST_FILE"
-
           git config user.name "HYDRA AI Bot"
           git config user.email "bot@hydraxrd.com"
 
-          # Sincroniza com remoto (sem --rebase, sem stash)
+          # Sincroniza com remoto sem perder os arquivos gerados
           git fetch origin main
           git reset --hard origin/main
 
-          # Restaura os arquivos gerados
+          # Restaura os 3 arquivos gerados
           mkdir -p src/data/posts public
-          cp /tmp/new-post.json "$POST_FILE"
-          cp /tmp/posts-index.json public/posts-index.json
-          echo "Restored: $POST_FILE"
+          cp /tmp/hydra-backup/new-post.json "$POST_FILE"
+          cp /tmp/hydra-backup/posts-index.json public/posts-index.json
+          cp /tmp/hydra-backup/sitemap.xml public/sitemap.xml
+          echo "Restored: $POST_FILE + posts-index.json + sitemap.xml"
 
-          git add "$POST_FILE" public/posts-index.json
+          git add "$POST_FILE" public/posts-index.json public/sitemap.xml
           git status
 
           if git diff --cached --quiet; then
