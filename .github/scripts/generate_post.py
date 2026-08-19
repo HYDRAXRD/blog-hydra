@@ -26,15 +26,47 @@ except FileNotFoundError:
 def title_to_slug(title: str) -> str:
     """Convert a post title to a clean URL slug without dates."""
     slug = title.lower()
-    slug = re.sub(r"[^a-z0-9\s-]", "", slug)   # remove special chars
-    slug = re.sub(r"[\s]+", "-", slug.strip())   # spaces -> dashes
-    slug = re.sub(r"-+", "-", slug)              # collapse multiple dashes
-    slug = slug[:80].rstrip("-")                  # max 80 chars
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+    slug = re.sub(r"[\s]+", "-", slug.strip())
+    slug = re.sub(r"-+", "-", slug)
+    slug = slug[:80].rstrip("-")
     return slug
 
 
+def generate_sitemap(posts_index: list) -> str:
+    """Generate a full sitemap.xml from the posts index."""
+    BASE_URL = "https://hydraxrd.com"
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        '',
+        '  <!-- Static pages -->',
+        '  <url>',
+        f'    <loc>{BASE_URL}/blog</loc>',
+        f'    <lastmod>{today}</lastmod>',
+        '    <changefreq>daily</changefreq>',
+        '    <priority>1.0</priority>',
+        '  </url>',
+    ]
+    for post in posts_index:
+        slug = post.get("slug", "")
+        date = post.get("date", today)
+        if not slug:
+            continue
+        lines += [
+            '',
+            '  <url>',
+            f'    <loc>{BASE_URL}/blog/post/{slug}</loc>',
+            f'    <lastmod>{date}</lastmod>',
+            '    <changefreq>monthly</changefreq>',
+            '    <priority>0.8</priority>',
+            '  </url>',
+        ]
+    lines += ['', '</urlset>', '']
+    return "\n".join(lines)
+
+
 def format_price(price):
-    """Format a crypto price as a human-readable decimal string, never scientific notation."""
     if price is None or price == "N/A":
         return "N/A"
     try:
@@ -330,7 +362,6 @@ except json.JSONDecodeError as e:
 # --- Enforce clean slug from title (safety net) ---
 raw_slug = post.get("slug", "")
 if not raw_slug or re.search(r"\d{4}-\d{2}-\d{2}", raw_slug):
-    # AI returned date in slug or empty — regenerate from title
     raw_slug = title_to_slug(post.get("title", f"post-{timestamp}"))
     print(f"Slug regenerated from title: {raw_slug}")
 
@@ -357,12 +388,14 @@ post["coverImage"] = image_url
 print(f"Image key: {image_key}")
 print(f"Cover image URL: {image_url}")
 
+# --- Save post JSON ---
 os.makedirs("src/data/posts", exist_ok=True)
 out_path = f"src/data/posts/{final_slug}.json"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(post, f, indent=2, ensure_ascii=False)
 print(f"Saved: {out_path}")
 
+# --- Update posts-index.json ---
 index_path = "public/posts-index.json"
 existing = []
 if os.path.exists(index_path):
@@ -379,6 +412,13 @@ os.makedirs("public", exist_ok=True)
 with open(index_path, "w", encoding="utf-8") as f:
     json.dump(existing, f, indent=2, ensure_ascii=False)
 print(f"Index updated: {len(existing)} posts")
+
+# --- Auto-update sitemap.xml ---
+sitemap_path = "public/sitemap.xml"
+sitemap_content = generate_sitemap(existing)
+with open(sitemap_path, "w", encoding="utf-8") as f:
+    f.write(sitemap_content)
+print(f"Sitemap updated: {sitemap_path} ({len(existing)} posts)")
 
 print(f"SUCCESS:{out_path}")
 print(f"SLUG:{final_slug}")
