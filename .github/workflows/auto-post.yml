@@ -53,12 +53,15 @@ jobs:
         run: |
           git config user.name "HYDRA AI Bot"
           git config user.email "bot@hydraxrd.com"
-          git pull --rebase origin main
+          # Stage first, THEN rebase — evita o erro de unstaged changes
           git add src/data/posts/ public/posts-index.json
           if git diff --cached --quiet; then
-            echo "Nothing to commit, skipping push"
+            echo "Nothing to commit, skipping"
             exit 0
           fi
+          git stash
+          git pull --rebase origin main
+          git stash pop
           git commit -m "Auto post: ${{ steps.generate.outputs.slug }}"
           git push origin main
           echo "Post pushed - Cloudflare deploy triggered automatically"
