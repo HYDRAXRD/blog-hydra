@@ -1,0 +1,70 @@
+name: 🤖 AI Auto Blog Post
+
+on:
+  schedule:
+    # Runs every day at 12:00 UTC (9:00 AM Brasilia time)
+    - cron: '0 12 * * *'
+  workflow_dispatch: # allows manual trigger from GitHub Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  generate-post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate blog post with AI
+        id: generate
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          echo "Generating post with AI..."
+
+          TODAY=$(date +%Y-%m-%d)
+          SLUG="hydra-update-$(date +%Y-%m-%d)"
+
+          PROMPT="You are the official content writer for HYDRA, a memecoin and DeFi ecosystem built on Radix DLT. Write an engaging, hype-driven blog post for today ($TODAY) about the HYDRA ecosystem. The post should feel energetic, community-driven, and futuristic. Cover one or more of these topics: HYDRA token news, HydraSwap, HydraBurn, HydraBattleArena, Radix DLT updates, DeFi tips, or community highlights. Return ONLY valid JSON with this exact structure, no markdown, no extra text: {\"id\": \"$SLUG\", \"title\": \"string\", \"slug\": \"$SLUG\", \"excerpt\": \"string max 200 chars\", \"content\": \"full article in markdown as single line with \\n for line breaks\", \"category\": \"one of: News|Ecosystem|Community|Game Updates|Guides|Announcements\", \"author\": \"HYDRA AI\", \"date\": \"$TODAY\", \"readingTime\": 4, \"featured\": false, \"coverImage\": \"\", \"tags\": [\"hydra\", \"radix\"]}"
+
+          RESPONSE=$(curl -s https://openrouter.ai/api/v1/chat/completions \
+            -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -H "HTTP-Referer: https://hydraxrd.com" \
+            -H "X-Title: HYDRA Blog Auto Post" \
+            -d "{
+              \"model\": \"google/gemini-2.0-flash-exp:free\",
+              \"messages\": [
+                {\"role\": \"user\", \"content\": $(echo "$PROMPT" | python3 -c \"import json,sys; print(json.dumps(sys.stdin.read()))\")}
+              ],
+              \"temperature\": 0.85,
+              \"max_tokens\": 2000
+            }")
+
+          echo "Raw API response received"
+
+          # Extract the content from the response
+          POST_JSON=$(echo "$RESPONSE" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+content = data['choices'][0]['message']['content'].strip()
+# Remove markdown code blocks if present
+if content.startswith('\`\`\`'):
+    lines = content.split('\n')
+    content = '\n'.join(lines[1:-1])
+print(content)
+")
+
+          echo "Extracted post JSON"
+          echo "$POST_JSON" > "src/data/posts/${SLUG}.json"
+          echo "slug=$SLUG" >> $GITHUB_OUTPUT
+          echo "Post saved: src/data/posts/${SLUG}.json"
+
+      - name: Commit and push new post
+        run: |
+          git config user.name "HYDRA AI Bot"
+          git config user.email "bot@hydraxrd.com"
+          git add src/data/posts/
+          git diff --cached --quiet || git commit -m "🤖 Auto post: ${{ steps.generate.outputs.slug }}"
+          git push
