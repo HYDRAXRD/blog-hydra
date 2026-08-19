@@ -13,43 +13,30 @@ hour = now.hour
 api_key = os.environ["OPENROUTER_API_KEY"]
 timestamp = now.strftime("%Y-%m-%d-%H")
 
-# ------------------------------------------------------------------
-# Load HYDRA official facts (single source of truth)
-# ------------------------------------------------------------------
 FACTS_PATH = ".github/data/hydra-facts.md"
 try:
     with open(FACTS_PATH, "r", encoding="utf-8") as f:
         HYDRA_FACTS = f.read()
 except FileNotFoundError:
     HYDRA_FACTS = ""
-    print("WARNING: hydra-facts.md not found, proceeding without facts")
+    print("WARNING: hydra-facts.md not found")
 
-# ------------------------------------------------------------------
-# Fetch real crypto news from CoinGecko (free, no key needed)
-# ------------------------------------------------------------------
-def fetch_coingecko_news(coin_id="bitcoin", limit=3):
-    """Fetch trending/news context from CoinGecko public API."""
+def fetch_coingecko_news(coin_id="bitcoin"):
     try:
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false"
         req = urllib.request.Request(url, headers={"User-Agent": "HYDRABlog/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
-        price = data.get("market_data", {}).get("current_price", {}).get("usd", "N/A")
-        change_24h = data.get("market_data", {}).get("price_change_percentage_24h", "N/A")
-        market_cap = data.get("market_data", {}).get("market_cap", {}).get("usd", "N/A")
-        description = data.get("description", {}).get("en", "")[:500]
         return {
-            "price_usd": price,
-            "change_24h": change_24h,
-            "market_cap_usd": market_cap,
-            "description": description
+            "price_usd": data.get("market_data", {}).get("current_price", {}).get("usd", "N/A"),
+            "change_24h": data.get("market_data", {}).get("price_change_percentage_24h", "N/A"),
+            "market_cap_usd": data.get("market_data", {}).get("market_cap", {}).get("usd", "N/A"),
         }
     except Exception as e:
         print(f"CoinGecko fetch failed for {coin_id}: {e}")
         return {}
 
 def fetch_trending_coins():
-    """Fetch trending coins from CoinGecko."""
     try:
         url = "https://api.coingecko.com/api/v3/search/trending"
         req = urllib.request.Request(url, headers={"User-Agent": "HYDRABlog/1.0"})
@@ -61,9 +48,6 @@ def fetch_trending_coins():
         print(f"Trending fetch failed: {e}")
         return []
 
-# ------------------------------------------------------------------
-# Image prompts
-# ------------------------------------------------------------------
 IMAGE_PROMPTS = {
     "HYDRA": "minimalist dark crypto blog banner, six-headed dragon silhouette in deep blue neon outline, clean black background, no text, professional web3 aesthetic",
     "HydraSwap": "minimalist dark crypto DEX banner, blue energy swap arrows, clean black background, no text, professional web3 aesthetic",
@@ -88,12 +72,9 @@ IMAGE_PROMPTS = {
 }
 DEFAULT_IMAGE_PROMPT = "minimalist dark crypto blog banner, rocket silhouette and coin symbols, dark space background, professional web3 aesthetic, no text"
 
-# ------------------------------------------------------------------
-# Topic pools
-# ------------------------------------------------------------------
 HYDRA_TOPICS = [
     ("HYDRA", "Write an educational article about the HYDRA memecoin on Radix DLT. Focus on the weekly burn mechanism (100,000 HYDRA burned every week), the HydraSwap DEX, and what makes it unique as a community-driven token launched on February 8, 2026."),
-    ("HYDRA", "Write an article explaining how to buy HYDRA token on Radix DLT using HydraSwap at hydraxrd.com/swap. Explain what Radix DLT is, why it matters for DeFi, and what the HYDRA community is building."),
+    ("HYDRA", "Write an article explaining how to buy HYDRA token on Radix DLT using HydraSwap. Explain what Radix DLT is, why it matters for DeFi, and what the HYDRA community is building."),
     ("HydraSwap", "Write about HydraSwap, the decentralized exchange (DEX) built on Radix DLT where HYDRA token is traded. Explain how DEXs work, why Radix DLT's asset-oriented model is different from EVM chains, and the role of HydraSwap in the HYDRA ecosystem."),
 ]
 
@@ -105,7 +86,7 @@ MEMECOIN_TOPICS = [
     ("BONK", "Write about BONK on Solana: the community airdrop that energized Solana in December 2022. Cover how it distributed tokens and what happened next."),
     ("FLOKI", "Write about FLOKI: the Viking-branded memecoin, FlokiFi DeFi suite, and global marketing. Use real data."),
     ("millionaires", "Write about the top 5 memecoins that gave life-changing returns to early holders: DOGE, SHIB, PEPE, WIF, BONK. What patterns did they share?"),
-    ("guide", "Write a guide: How to research a memecoin before investing. Cover on-chain data, community signals, liquidity, tokenomics red flags, and timing. Be educational and honest about risks."),
+    ("guide", "Write a guide: How to research a memecoin before investing. Cover on-chain data, community signals, liquidity, tokenomics red flags, and timing."),
     ("memecoin", "Write about memecoin culture: why internet memes are the most powerful marketing force in crypto, community as product, and viral mechanics."),
     ("risks", "Write an honest article about the risks of memecoins: rug pulls, wash trading, low liquidity traps, and how to protect yourself."),
 ]
@@ -127,9 +108,6 @@ image_key, topic = random.choice(pool)
 slug = f"post-{timestamp}"
 image_prompt = IMAGE_PROMPTS.get(image_key, DEFAULT_IMAGE_PROMPT)
 
-# ------------------------------------------------------------------
-# Fetch real market data from CoinGecko
-# ------------------------------------------------------------------
 market_context = ""
 coin_map = {
     "Dogecoin": "dogecoin", "DOGE": "dogecoin",
@@ -141,26 +119,18 @@ coin_map = {
 }
 if image_key in coin_map:
     print(f"Fetching CoinGecko data for {coin_map[image_key]}...")
-    cg_data = fetch_coingecko_data = fetch_coingecko_news(coin_map[image_key])
+    cg_data = fetch_coingecko_news(coin_map[image_key])
     if cg_data:
-        market_context = f"""
-## Real Market Data (from CoinGecko, fetched now):
-- Current price: ${cg_data.get('price_usd', 'N/A')}
-- 24h change: {cg_data.get('change_24h', 'N/A')}%
-- Market cap: ${cg_data.get('market_cap_usd', 'N/A'):,} USD
-"""
+        market_context = f"\nReal Market Data (CoinGecko, fetched now):\nCurrent price: ${cg_data.get('price_usd', 'N/A')}\n24h change: {cg_data.get('change_24h', 'N/A')}%\nMarket cap: ${cg_data.get('market_cap_usd', 'N/A')} USD\n"
         print(f"CoinGecko data: {cg_data}")
 
-if image_key == "market" or pool == MARKET_TOPICS:
+if image_key == "market":
     trending = fetch_trending_coins()
     if trending:
-        market_context += "\n## Trending coins right now (CoinGecko):\n"
+        market_context += "\nTrending coins right now (CoinGecko):\n"
         for t in trending:
-            market_context += f"- {t['name']} ({t['symbol']}) — Rank #{t['market_cap_rank']}\n"
+            market_context += f"{t['name']} ({t['symbol']}) - Rank #{t['market_cap_rank']}\n"
 
-# ------------------------------------------------------------------
-# Category / tags
-# ------------------------------------------------------------------
 if pool == HYDRA_TOPICS:
     category = random.choice(["News", "Guides"])
 elif image_key in ["Dogecoin","DOGE","Shiba","SHIB","Pepe","PEPE","WIF","dogwifhat","BONK","FLOKI","memecoin","millionaires"]:
@@ -176,7 +146,7 @@ else:
 
 tags_map = {
     "HYDRA": ["hydra", "radix", "memecoin"],
-    "HydraSwap": ["hydra", "hydrswap", "dex", "radix"],
+    "HydraSwap": ["hydra", "hydraswap", "dex", "radix"],
     "Dogecoin": ["doge", "dogecoin", "memecoin"],
     "Shiba": ["shib", "shiba", "memecoin"],
     "Pepe": ["pepe", "memecoin", "culture"],
@@ -192,9 +162,6 @@ tags_map = {
 }
 tags = tags_map.get(image_key, ["memecoin", "crypto"])
 
-# ------------------------------------------------------------------
-# Build prompt
-# ------------------------------------------------------------------
 disclaimer = (
     "\n\n---\n\n"
     "**\u26a0\ufe0f Disclaimer:** This article is for educational and entertainment purposes only. "
@@ -205,36 +172,38 @@ disclaimer = (
 
 hydra_instruction = ""
 if pool == HYDRA_TOPICS and HYDRA_FACTS:
-    hydra_instruction = f"""
-
-## MANDATORY: Official HYDRA Facts — use ONLY these, never invent:
-{HYDRA_FACTS}
-"""
+    hydra_instruction = f"\n\nMANDATORY: Official HYDRA Facts - use ONLY these, never invent:\n{HYDRA_FACTS}\n"
 
 system_msg = (
     "You are the content writer for HYDRA Chronicles, a crypto and memecoin blog. "
-    "You write accurate, well-researched articles. "
-    "You NEVER invent statistics, prices, or claims that are not provided to you. "
-    "When market data is provided, use it. When it is not provided, say data varies and encourage readers to check live sources. "
-    "Return ONLY a raw JSON object. No markdown fences. No extra text before or after the JSON."
+    "You write accurate, engaging, human-sounding articles. "
+    "CRITICAL FORMATTING RULES that you must follow without exception:\n"
+    "1. NEVER use bullet points or dashes (-) to list items. Write everything as flowing prose paragraphs instead.\n"
+    "2. Use ## for main section titles only (not ### or ####). Keep section titles short and punchy.\n"
+    "3. NEVER use ### or #### headers ever.\n"
+    "4. ALL links must be masked as markdown hyperlinks using the format [visible text](url). NEVER show a raw URL.\n"
+    "5. Write in a natural, human tone. Avoid sounding like AI. No robotic transitions like 'Furthermore', 'Moreover', 'In conclusion'.\n"
+    "6. You NEVER invent statistics, prices, or claims not provided to you.\n"
+    "Return ONLY a raw JSON object. No markdown fences. No extra text."
 )
 
 user_msg = (
     f"Today is {today}. {topic}\n"
     f"{hydra_instruction}"
     f"{market_context}\n"
-    "Write a compelling, well-structured article of AT LEAST 1200 words. "
-    "Use multiple headers (##), bullet points, bold highlights, and engaging storytelling. "
-    "Only include facts and data that are provided above or are widely established public knowledge. "
-    "Do NOT invent prices, statistics, user numbers, or claims not given to you. "
-    f"Always end the content field with this exact disclaimer: {disclaimer}\n\n"
+    "Write a compelling article of AT LEAST 1200 words. "
+    "Use ## section headers and bold text for emphasis. "
+    "NO bullet points, NO dashes, NO ### headers. Write in flowing paragraphs only. "
+    "ALL links must be [text](url) format, never raw URLs. "
+    "Only use facts provided or widely established public knowledge. "
+    f"End the content field with this exact disclaimer: {disclaimer}\n\n"
     "Return ONLY this JSON:\n"
     "{\n"
     f'  "id": "{slug}",\n'
     '  "title": "<catchy engaging title>",\n'
     f'  "slug": "{slug}",\n'
     '  "excerpt": "<compelling summary under 200 chars>",\n'
-    '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words>",\n'
+    '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words, NO bullet points, NO dashes, NO ### headers, ALL links masked>",\n'
     f'  "category": "{category}",\n'
     '  "author": "HYDRA",\n'
     f'  "date": "{today}",\n'
@@ -245,9 +214,6 @@ user_msg = (
     "}"
 )
 
-# ------------------------------------------------------------------
-# Call AI
-# ------------------------------------------------------------------
 MODELS = [
     "openrouter/free",
     "nvidia/nemotron-3-super-120b-a12b:free",
@@ -319,13 +285,11 @@ except json.JSONDecodeError as e:
     print(f"Raw content: {content[:500]}")
     sys.exit(1)
 
-# Dynamic reading time
 word_count = len(post.get("content", "").split())
 post["readingTime"] = max(1, round(word_count / 200))
 post["author"] = "HYDRA"
 post["category"] = category
 
-# Cover image via Pollinations (minimalist prompts = cleaner results)
 encoded_prompt = urllib.parse.quote(image_prompt)
 image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true&seed={random.randint(1, 99999)}"
 post["coverImage"] = image_url
