@@ -160,19 +160,20 @@ def fetch_cg_global():
 
 
 def fetch_cg_trending():
-    """Fetch top 5 trending coins from CoinGecko."""
+    """Fetch top 7 trending coins from CoinGecko."""
     try:
         url = f"{_cg_base()}/search/trending"
         req = urllib.request.Request(url, headers=_cg_headers())
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
-        coins = data.get("coins", [])[:5]
+        coins = data.get("coins", [])[:7]
         return [
             {
                 "name": c["item"]["name"],
                 "symbol": c["item"]["symbol"],
                 "market_cap_rank": c["item"].get("market_cap_rank", "N/A"),
                 "price_btc": c["item"].get("price_btc", "N/A"),
+                "data": c["item"].get("data", {}),
             }
             for c in coins
         ]
@@ -188,7 +189,7 @@ def fetch_cg_top_memecoins():
             "vs_currency": "usd",
             "category": "meme-token",
             "order": "market_cap_desc",
-            "per_page": 8,
+            "per_page": 10,
             "page": 1,
             "sparkline": "false",
             "price_change_percentage": "24h,7d",
@@ -283,7 +284,7 @@ def fetch_cmc_global():
 
 
 def fetch_cmc_trending():
-    """Fetch trending/gainers from CMC (top 100 by 24h change)."""
+    """Fetch top gainers from CMC (sorted by 24h change)."""
     if not cmc_key:
         return []
     try:
@@ -345,11 +346,9 @@ def build_market_context(image_key: str) -> str:
     if image_key in cg_coin_map:
         cg_id, cmc_sym = cg_coin_map[image_key]
 
-        # Try CMC first (richer data), fall back to CoinGecko
         cmc_data = fetch_cmc_coin(cmc_sym)
         cg_data  = fetch_coingecko_coin(cg_id)
 
-        # Merge: prefer CMC values, fill gaps with CoinGecko
         price      = cmc_data.get("price_usd")    or cg_data.get("price_usd", "N/A")
         change_24h = cmc_data.get("change_24h")   or cg_data.get("change_24h", "N/A")
         change_7d  = cmc_data.get("change_7d")    or cg_data.get("change_7d", "N/A")
@@ -416,7 +415,9 @@ def build_market_context(image_key: str) -> str:
     if cg_trending:
         lines.append("\nTrending right now (CoinGecko):")
         for t in cg_trending:
-            lines.append(f"  {t['name']} ({t['symbol']}) - Rank #{t['market_cap_rank']}")
+            price_usd = t.get("data", {}).get("price", "")
+            price_str = f" | ${format_price(price_usd)}" if price_usd else ""
+            lines.append(f"  {t['name']} ({t['symbol']}) - Rank #{t['market_cap_rank']}{price_str}")
 
     cmc_gainers = fetch_cmc_trending()
     if cmc_gainers:
@@ -426,28 +427,22 @@ def build_market_context(image_key: str) -> str:
                 chg = f"{float(g['change_24h']):.2f}%"
             except:
                 chg = str(g["change_24h"])
-            lines.append(f"  {g['name']} ({g['symbol']}) +{chg} | Rank #{g['cmc_rank']}")
+            lines.append(f"  {g['name']} ({g['symbol']}) +{chg} | Rank #{g['cmc_rank']} | ${format_price(g['price'])}")
 
-    # --- Top memecoins snapshot (for memecoin topics) ---
-    memecoin_keys = {
-        "Dogecoin","DOGE","Shiba","SHIB","Pepe","PEPE",
-        "WIF","dogwifhat","BONK","FLOKI","memecoin","millionaires",
-        "market","guide","risks","psychology",
-    }
-    if image_key in memecoin_keys:
-        top_memes = fetch_cg_top_memecoins()
-        if top_memes:
-            lines.append("\nTop memecoins by market cap (CoinGecko):")
-            for m in top_memes:
-                try:
-                    chg = f"{float(m['change_24h']):.2f}%"
-                except:
-                    chg = str(m["change_24h"])
-                lines.append(
-                    f"  {m['name']} ({m['symbol']}) "
-                    f"${format_price(m['price'])} | {chg} 24h | "
-                    f"MCap {format_large_number(m['market_cap'])}"
-                )
+    # --- Top memecoins snapshot (always included for editorial context) ---
+    top_memes = fetch_cg_top_memecoins()
+    if top_memes:
+        lines.append("\nTop memecoins by market cap right now (CoinGecko):")
+        for m in top_memes:
+            try:
+                chg = f"{float(m['change_24h']):.2f}%"
+            except:
+                chg = str(m["change_24h"])
+            lines.append(
+                f"  {m['name']} ({m['symbol']}) "
+                f"${format_price(m['price'])} | {chg} 24h | "
+                f"MCap {format_large_number(m['market_cap'])}"
+            )
 
     return "\n".join(lines)
 
@@ -482,6 +477,10 @@ def fetch_unsplash_image(query: str, width: int = 1200, height: int = 630) -> st
         "risks":       "risk warning cryptocurrency danger",
         "psychology":  "trading psychology brain decision",
         "millionaires":"crypto wealth gold coins success",
+        "trending":    "cryptocurrency trending chart viral",
+        "bitcoin":     "bitcoin gold digital currency",
+        "culture":     "internet meme culture digital art",
+        "history":     "crypto history timeline blockchain",
     }
 
     search_query = QUERY_MAP.get(query, f"{query} cryptocurrency")
@@ -542,6 +541,10 @@ def _unsplash_fallback(topic_key: str) -> str:
         "risks":       "https://images.unsplash.com/photo-1563986768494-4dee2763ff3f?w=1200&h=630&fit=crop&auto=format",
         "psychology":  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1200&h=630&fit=crop&auto=format",
         "millionaires":"https://images.unsplash.com/photo-1553729459-efe14ef6055d?w=1200&h=630&fit=crop&auto=format",
+        "trending":    "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1200&h=630&fit=crop&auto=format",
+        "bitcoin":     "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=1200&h=630&fit=crop&auto=format",
+        "culture":     "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1200&h=630&fit=crop&auto=format",
+        "history":     "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1200&h=630&fit=crop&auto=format",
     }
     return FALLBACKS.get(
         topic_key,
@@ -560,22 +563,26 @@ HYDRA_TOPICS = [
 ]
 
 MEMECOIN_TOPICS = [
-    ("Dogecoin",    "Write the story of Dogecoin (DOGE): from joke to $80B market cap. Cover the 2013 origin, Reddit community, Elon Musk influence, and the 2021 explosion. Use real facts and current market data provided."),
+    ("trending", "Using the trending coins and top memecoins data provided, identify the single most interesting memecoin currently attracting real market attention. Tell its story: where the meme or narrative came from, how the project emerged, why people started paying attention to it, and what can actually be verified about it. Do not default to Dogecoin, Shiba Inu, Pepe, Bonk, WIF or Floki unless they are genuinely leading the trending data provided. Prioritize whichever coin the data shows is actually trending right now."),
+    ("Dogecoin",    "Write the story of Dogecoin (DOGE): from joke to massive market cap. Cover the 2013 origin, Reddit community, Elon Musk influence, and the 2021 explosion. Use real facts and current market data provided."),
     ("Shiba",       "Write a deep dive into Shiba Inu (SHIB): the DOGE killer narrative, ShibArmy, Vitalik Buterin burn event, Shibarium launch. Use real data provided."),
     ("Pepe",        "Write about Pepe (PEPE) coin: how a 4chan frog became a top memecoin in 2023. Cover the cultural roots and current on-chain data provided."),
     ("WIF",         "Write about WIF (dogwifhat) on Solana: the hat-wearing dog that reached multi-billion market cap. Cover the meme origin, Solana memecoin culture, and current market data provided."),
     ("BONK",        "Write about BONK on Solana: the community airdrop that energized Solana in December 2022. Cover how it distributed tokens and current market position using data provided."),
     ("FLOKI",       "Write about FLOKI: the Viking-branded memecoin, FlokiFi DeFi suite, and global marketing. Use current market data provided."),
-    ("millionaires","Write about the top 5 memecoins that gave life-changing returns to early holders: DOGE, SHIB, PEPE, WIF, BONK. What patterns did they share? Use current market data provided."),
+    ("millionaires","Write about the memecoins that gave life-changing returns to early holders. What patterns did they share? Use current market data provided."),
     ("guide",       "Write a guide: How to research a memecoin before investing. Cover on-chain data, community signals, liquidity, tokenomics red flags, and timing. Reference current market data provided as examples."),
     ("memecoin",    "Write about memecoin culture: why internet memes are the most powerful marketing force in crypto, community as product, and viral mechanics. Use current top memecoin data provided."),
     ("risks",       "Write an honest article about the risks of memecoins: rug pulls, wash trading, low liquidity traps, and how to protect yourself. Use current market data provided as real examples."),
+    ("culture",     "Write about the cultural history of memecoins: from Dogecoin's Shibe meme to the explosion of Solana memecoins. Explore how internet culture became a financial force."),
+    ("history",     "Write about a significant moment in memecoin history — chosen based on whatever is most relevant to the trending data provided. Tell the full story with verified facts."),
 ]
 
 MARKET_TOPICS = [
-    ("market",     "Write a market analysis of the current crypto and memecoin sector. Use ALL the real-time market data provided (global market cap, BTC dominance, trending coins, top gainers) to build a comprehensive narrative."),
+    ("market",     "Write a market analysis of the current crypto and memecoin sector. Use ALL the real-time market data provided (global market cap, BTC dominance, trending coins, top gainers) to build a comprehensive narrative about what is actually happening in the market right now."),
     ("DeFi",       "Write about DeFi on Radix DLT: why Radix's asset-oriented model differs from EVM, and the opportunity for new projects like HYDRA. Reference current DeFi volume data provided."),
     ("psychology", "Write about the psychology of memecoin investing: FOMO, diamond hands, paper hands, and how emotion drives price action. Use current trending coin data provided as real examples."),
+    ("bitcoin",    "Write about Bitcoin's current role in the crypto market. Use the global market data and BTC dominance figures provided to anchor the article in what is actually happening now."),
 ]
 
 if hour < 13:
@@ -601,11 +608,11 @@ market_context = build_market_context(image_key)
 
 if pool == HYDRA_TOPICS:
     category = random.choice(["News", "Guides"])
-elif image_key in ["Dogecoin","DOGE","Shiba","SHIB","Pepe","PEPE","WIF","dogwifhat","BONK","FLOKI","memecoin","millionaires"]:
+elif image_key in ["Dogecoin","DOGE","Shiba","SHIB","Pepe","PEPE","WIF","dogwifhat","BONK","FLOKI","memecoin","millionaires","trending","culture","history"]:
     category = "Moonshots"
 elif image_key == "guide":
     category = "Guides"
-elif image_key in ["market","DeFi","Radix"]:
+elif image_key in ["market","DeFi","Radix","bitcoin"]:
     category = "Market Analysis"
 elif image_key == "psychology":
     category = "Market Analysis"
@@ -627,11 +634,15 @@ tags_map = {
     "psychology":  ["psychology", "trading", "memecoin"],
     "millionaires":["memecoin", "history", "doge"],
     "DeFi":        ["defi", "radix", "blockchain"],
+    "trending":    ["trending", "memecoin", "crypto"],
+    "bitcoin":     ["bitcoin", "btc", "market"],
+    "culture":     ["memecoin", "culture", "history"],
+    "history":     ["memecoin", "history", "crypto"],
 }
 tags = tags_map.get(image_key, ["memecoin", "crypto"])
 
 # ---------------------------------------------------------------------------
-# Prompts
+# System prompt — full HYDRA Chronicles editorial policy
 # ---------------------------------------------------------------------------
 
 disclaimer = (
@@ -646,38 +657,78 @@ hydra_instruction = ""
 if pool == HYDRA_TOPICS and HYDRA_FACTS:
     hydra_instruction = f"\n\nMANDATORY: Official HYDRA Facts - use ONLY these, never invent:\n{HYDRA_FACTS}\n"
 
-system_msg = (
-    "You are the content writer for HYDRA Chronicles, a crypto and memecoin blog. "
-    "You write accurate, engaging, human-sounding articles. "
-    "CRITICAL FORMATTING RULES that you must follow without exception:\n"
-    "1. NEVER use bullet points or dashes (-) to list items. Write everything as flowing prose paragraphs instead.\n"
-    "2. Use ## for main section titles only (not ### or ####). Keep section titles short and punchy.\n"
-    "3. NEVER use ### or #### headers ever.\n"
-    "4. ALL links must be masked as markdown hyperlinks using the format [visible text](url). NEVER show a raw URL.\n"
-    "5. Write in a natural, human tone. Avoid sounding like AI. No robotic transitions like 'Furthermore', 'Moreover', 'In conclusion'.\n"
-    "6. You NEVER invent statistics, prices, or claims not provided to you.\n"
-    "7. PRICE FORMATTING: When writing any crypto price, ALWAYS use standard decimal notation (e.g. $0.00002083). NEVER use scientific notation (e.g. 2.079e-05). NEVER use more than 2 decimal places for percentages (e.g. 3.98%, never 3.98116%).\n"
-    "8. SLUG RULE: The slug must be derived ONLY from the title, lowercase, hyphens only, no dates, no timestamps. Example: title 'Dogecoin: From Joke to $80B' -> slug 'dogecoin-from-joke-to-80b'.\n"
-    "9. MARKET DATA: When real-time market data is provided, ALWAYS reference it naturally in the article body — price, volume, dominance, trending coins. Make the article feel timely and data-driven.\n"
-    "Return ONLY a raw JSON object. No markdown fences. No extra text."
-)
+system_msg = """You are the senior English language content writer, researcher, and editorial strategist for HYDRA Chronicles, the official blog of HYDRA, published at hydraxrd.com/blog.
+
+Your mission is to create accurate, engaging, well-researched, human-sounding articles about memecoins, cryptocurrency culture, Bitcoin, crypto trends, blockchain ecosystems, and the broader cryptocurrency market.
+
+The primary editorial focus is memecoins that are currently trending or attracting significant attention, especially those appearing in trending sections or receiving notable market attention on platforms such as CoinMarketCap and CoinGecko.
+
+HYDRA Chronicles must not become a blog that talks only about HYDRA. The publication should cover the memecoin ecosystem as a whole, tell the stories behind trending memecoins, explore the biggest memes and cultural moments in cryptocurrency, discuss Bitcoin, and occasionally connect relevant topics to the HYDRA ecosystem and Radix DLT.
+
+The central editorial principle is simple: Never invent anything. Every factual claim must be confirmed through a reliable source before being presented as fact.
+
+CORE EDITORIAL MISSION
+Write about what is actually happening in the cryptocurrency and memecoin ecosystem. When real-time market data is provided, use it to determine what is genuinely trending right now — do not default to writing about the same tokens repeatedly. If the trending data shows a coin that is not Dogecoin, Shiba Inu, Pepe, Bonk, WIF, or Floki, write about that coin instead. Choose the subject based on genuine relevance to the data provided.
+
+When an article focuses on a trending memecoin, tell its story. Explain where the meme or narrative came from when that information can be verified. Explain how the project emerged. Explain why people started paying attention to it. Explain relevant milestones. Explain the community or cultural narrative surrounding it. Explain what can actually be verified about the project. Do not simply write an article consisting of price statistics. The story behind a memecoin is often more interesting than its price.
+
+VERIFY EVERYTHING
+Accuracy is more important than speed, hype, or article length. Never invent a founder, launch date, partnership, listing, market capitalization, trading volume, community size, token supply, technical feature, roadmap, price, historical event, or explanation for a price movement. If something cannot be verified, do not present it as fact. If different reputable sources provide conflicting information, acknowledge the discrepancy. Never fill missing information with assumptions.
+
+NO FINANCIAL PROMISES
+HYDRA Chronicles is an editorial publication, not a financial advisor. Never guarantee profits. Never tell readers that a token will definitely rise or fall. Never describe a cryptocurrency as a guaranteed investment. Never create artificial urgency designed to make readers buy a token. Market analysis must remain factual, balanced, and clearly separated from speculation.
+
+HYDRA
+HYDRA may be discussed when there is a legitimate editorial connection to the topic. The HYDRA ecosystem includes HydraSwap, HydraBurn, HydraBubbles, and HydraBattleArena. Do not force HYDRA into an article simply for promotional purposes. Never invent HYDRA statistics, users, transaction numbers, trading volume, revenue, partnerships, or exchange listings. Before describing a HYDRA feature, verify the information using an official HYDRA source.
+
+RADIX DLT
+When discussing Radix DLT, use only verifiable information. Do not invent technical capabilities, adoption numbers, partnerships, or network performance claims. Explain technical concepts clearly for readers who are not blockchain experts.
+
+BITCOIN
+Articles may discuss Bitcoin's history, market movements, narratives, major milestones, cultural influence, relationship with altcoins and memecoins, and market cycles. Never portray Bitcoin as guaranteed to rise or fall. When discussing Bitcoin's price or market data, verify the information from a reliable current source.
+
+ABSOLUTE FORMATTING RULES
+NEVER use bullet points. NEVER use numbered lists. NEVER use dash-based lists. NEVER use asterisks for lists. The article must be written entirely as flowing prose organized with headings and paragraphs. Use ## for main section headings only. Never use ### or ####.
+
+LINKS
+All links must be masked as markdown hyperlinks using [visible text](url) format. Never display raw URLs.
+
+CRYPTOCURRENCY PRICES
+Always express cryptocurrency prices in United States dollars using standard decimal notation (e.g. $0.00002083). Never use scientific notation. Percentages must contain no more than two decimal places.
+
+ARTICLE LENGTH
+Every article must contain at least 1,200 words in the content field. Never reach the minimum by repeating information or padding with generic statements.
+
+TITLE AND SLUG
+The slug must be derived ONLY from the final title: lowercase, hyphens only, no dates, no timestamps, max 80 characters.
+
+SEO
+Optimize every article naturally for search engines without sacrificing readability. Do not keyword stuff. Do not create clickbait titles. The article should satisfy the reader's search intent.
+
+FINAL QUALITY CONTROL
+Before returning, verify: article is in English, at least 1,200 words, no bullet points, no numbered lists, no ### or #### headings, no raw URLs, prices in USD decimal notation, percentages max 2 decimal places, slug from title only, no unsupported claims, no fictional statistics.
+
+OUTPUT FORMAT
+Return ONLY a valid raw JSON object. No markdown fences. No explanations before or after the JSON."""
 
 user_msg = (
     f"Today is {today}. {topic}\n"
     f"{hydra_instruction}"
     f"{market_context}\n\n"
+    "IMPORTANT EDITORIAL INSTRUCTION: The market data above contains real-time trending coins and top memecoins. "
+    "If the topic asks you to identify what is trending, read the trending and top memecoin data carefully and base your article on whichever coin is genuinely leading the data right now. "
+    "Do not write about Dogecoin, Shiba Inu, Pepe, Bonk, WIF or Floki by default — only choose them if the data confirms they are actually trending at this moment.\n\n"
     "Write a compelling article of AT LEAST 1200 words. "
-    "Use ## section headers and bold text for emphasis. "
-    "NO bullet points, NO dashes, NO ### headers. Write in flowing paragraphs only. "
+    "Use ## section headers. NO bullet points, NO dashes, NO ### headers. Write in flowing paragraphs only. "
     "ALL links must be [text](url) format, never raw URLs. "
-    "IMPORTANT: Write all crypto prices in standard decimal notation (e.g. $0.00002083), NEVER scientific notation. Round percentages to 2 decimal places. "
-    "USE the real-time market data provided above — weave prices, volumes, market cap, dominance and trending coins naturally into the article. "
+    "Write all crypto prices in standard decimal notation (e.g. $0.00002083), NEVER scientific notation. Round percentages to 2 decimal places. "
+    "Weave prices, volumes, market cap, dominance, and trending coins naturally into the article. "
     "Only use facts provided or widely established public knowledge. "
     f"End the content field with this exact disclaimer: {disclaimer}\n\n"
     "Return ONLY this JSON:\n"
     "{\n"
-    '  "title": "<catchy engaging title>",\n'
-    '  "slug": "<URL slug derived from the title: lowercase, hyphens only, NO dates, NO timestamps, max 80 chars. Example: dogecoin-from-joke-to-80b>",\n'
+    '  "title": "<catchy engaging title that accurately reflects the article subject>",\n'
+    '  "slug": "<URL slug derived from the title: lowercase, hyphens only, NO dates, NO timestamps, max 80 chars>",\n'
     '  "excerpt": "<compelling summary under 200 chars, prices in decimal notation only>",\n'
     '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words, NO bullet points, NO dashes, NO ### headers, ALL links masked, prices always in decimal notation>",\n'
     f'  "category": "{category}",\n'
