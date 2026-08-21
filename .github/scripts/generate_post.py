@@ -12,6 +12,7 @@ now = datetime.now(timezone.utc)
 today = now.strftime("%Y-%m-%d")
 hour = now.hour
 api_key = os.environ["OPENROUTER_API_KEY"]
+unsplash_key = os.environ.get("UNSPLASH_API_KEY", "")
 timestamp = now.strftime("%Y-%m-%d-%H")
 
 FACTS_PATH = ".github/data/hydra-facts.md"
@@ -81,6 +82,110 @@ def format_price(price):
     return formatted
 
 
+def fetch_unsplash_image(query: str, width: int = 1200, height: int = 630) -> str:
+    """
+    Fetch a relevant image URL from Unsplash using their free API.
+    Falls back to a curated fallback URL if the API is unavailable.
+    """
+    if not unsplash_key:
+        print("WARNING: UNSPLASH_API_KEY not set, using fallback image")
+        return _unsplash_fallback(query)
+
+    # Map topic keywords to better Unsplash search terms
+    QUERY_MAP = {
+        "HYDRA": "blockchain crypto dragon dark",
+        "HydraSwap": "decentralized exchange cryptocurrency dark",
+        "Dogecoin": "dogecoin shiba inu cryptocurrency",
+        "DOGE": "dogecoin shiba inu cryptocurrency",
+        "Shiba": "shiba inu dog cryptocurrency",
+        "SHIB": "shiba inu dog cryptocurrency",
+        "Pepe": "frog meme cryptocurrency digital",
+        "PEPE": "frog meme cryptocurrency digital",
+        "WIF": "dog hat cryptocurrency solana",
+        "dogwifhat": "dog hat cryptocurrency solana",
+        "BONK": "dog cryptocurrency solana airdrop",
+        "FLOKI": "viking warrior cryptocurrency",
+        "memecoin": "meme cryptocurrency rocket moon",
+        "market": "cryptocurrency market chart bitcoin",
+        "DeFi": "decentralized finance blockchain network",
+        "Radix": "blockchain network nodes blue",
+        "guide": "crypto guide compass research",
+        "risks": "risk warning cryptocurrency danger",
+        "psychology": "trading psychology brain decision",
+        "millionaires": "crypto wealth gold coins success",
+    }
+
+    search_query = QUERY_MAP.get(query, f"{query} cryptocurrency")
+    print(f"Fetching Unsplash image for query: '{search_query}'")
+
+    try:
+        params = urllib.parse.urlencode({
+            "query": search_query,
+            "orientation": "landscape",
+            "per_page": 10,
+            "content_filter": "high",
+        })
+        url = f"https://api.unsplash.com/search/photos?{params}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Client-ID {unsplash_key}",
+                "Accept-Version": "v1",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+
+        results = data.get("results", [])
+        if not results:
+            print(f"No Unsplash results for '{search_query}', using fallback")
+            return _unsplash_fallback(query)
+
+        # Pick a random result from the top results for variety
+        photo = random.choice(results[:5])
+        # Use raw URL with custom dimensions via Unsplash image CDN params
+        raw_url = photo["urls"]["raw"]
+        image_url = f"{raw_url}&w={width}&h={height}&fit=crop&auto=format&q=80"
+        print(f"Unsplash image selected: {photo.get('id')} by {photo.get('user', {}).get('name', 'unknown')}")
+        return image_url
+
+    except Exception as e:
+        print(f"Unsplash fetch failed: {e}, using fallback")
+        return _unsplash_fallback(query)
+
+
+def _unsplash_fallback(topic_key: str) -> str:
+    """
+    Curated fallback Unsplash photo IDs per topic.
+    These are stable, high-quality photos available without API key.
+    """
+    FALLBACKS = {
+        "HYDRA":      "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=1200&h=630&fit=crop&auto=format",
+        "HydraSwap":  "https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=1200&h=630&fit=crop&auto=format",
+        "Dogecoin":   "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&h=630&fit=crop&auto=format",
+        "DOGE":       "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&h=630&fit=crop&auto=format",
+        "Shiba":      "https://images.unsplash.com/photo-1620321023374-d1a68fbc720d?w=1200&h=630&fit=crop&auto=format",
+        "SHIB":       "https://images.unsplash.com/photo-1620321023374-d1a68fbc720d?w=1200&h=630&fit=crop&auto=format",
+        "Pepe":       "https://images.unsplash.com/photo-1639762681057-408e52192e55?w=1200&h=630&fit=crop&auto=format",
+        "PEPE":       "https://images.unsplash.com/photo-1639762681057-408e52192e55?w=1200&h=630&fit=crop&auto=format",
+        "WIF":        "https://images.unsplash.com/photo-1645731012575-3799282e8da5?w=1200&h=630&fit=crop&auto=format",
+        "BONK":       "https://images.unsplash.com/photo-1643101809204-6fb869816dbe?w=1200&h=630&fit=crop&auto=format",
+        "FLOKI":      "https://images.unsplash.com/photo-1589254065878-42c9da997008?w=1200&h=630&fit=crop&auto=format",
+        "memecoin":   "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1200&h=630&fit=crop&auto=format",
+        "market":     "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&h=630&fit=crop&auto=format",
+        "DeFi":       "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=1200&h=630&fit=crop&auto=format",
+        "Radix":      "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=1200&h=630&fit=crop&auto=format",
+        "guide":      "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=1200&h=630&fit=crop&auto=format",
+        "risks":      "https://images.unsplash.com/photo-1563986768494-4dee2763ff3f?w=1200&h=630&fit=crop&auto=format",
+        "psychology": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1200&h=630&fit=crop&auto=format",
+        "millionaires":"https://images.unsplash.com/photo-1553729459-efe14ef6055d?w=1200&h=630&fit=crop&auto=format",
+    }
+    return FALLBACKS.get(
+        topic_key,
+        "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1200&h=630&fit=crop&auto=format"
+    )
+
+
 def fetch_coingecko_news(coin_id="bitcoin"):
     try:
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false"
@@ -109,30 +214,6 @@ def fetch_trending_coins():
         print(f"Trending fetch failed: {e}")
         return []
 
-
-IMAGE_PROMPTS = {
-    "HYDRA": "minimalist dark crypto blog banner, six-headed dragon silhouette in deep blue neon outline, clean black background, no text, professional web3 aesthetic",
-    "HydraSwap": "minimalist dark crypto DEX banner, blue energy swap arrows, clean black background, no text, professional web3 aesthetic",
-    "Dogecoin": "minimalist dark crypto banner, golden shiba inu coin on dark background, clean professional web3 aesthetic, no text",
-    "DOGE": "minimalist dark crypto banner, golden shiba inu coin on dark background, clean professional web3 aesthetic, no text",
-    "Shiba": "minimalist dark crypto banner, red and orange shiba inu dog silhouette, dark background, professional web3 aesthetic, no text",
-    "SHIB": "minimalist dark crypto banner, red and orange shiba inu dog silhouette, dark background, professional web3 aesthetic, no text",
-    "Pepe": "minimalist dark crypto banner, green frog silhouette in gold crown, dark moody background, professional web3 aesthetic, no text",
-    "PEPE": "minimalist dark crypto banner, green frog silhouette in gold crown, dark moody background, professional web3 aesthetic, no text",
-    "WIF": "minimalist dark crypto banner, small dog silhouette wearing a hat, purple solana-toned background, professional web3 aesthetic, no text",
-    "dogwifhat": "minimalist dark crypto banner, small dog silhouette wearing a hat, purple solana-toned background, professional web3 aesthetic, no text",
-    "BONK": "minimalist dark crypto banner, orange dog with bat icon, solana purple tones, dark background, professional web3 aesthetic, no text",
-    "FLOKI": "dark cinematic crypto banner, fierce golden viking warrior helmet with glowing amber Norse runes, dramatic dark background, atmospheric fog, no text, professional web3 aesthetic, ultra detailed",
-    "memecoin": "minimalist dark crypto banner, rocket silhouette with coin trail, dark cosmic background, professional web3 aesthetic, no text",
-    "market": "minimalist dark crypto banner, glowing candlestick chart lines, dark background, professional web3 aesthetic, no text",
-    "DeFi": "minimalist dark crypto banner, interconnected blockchain nodes in blue, dark background, professional web3 aesthetic, no text",
-    "Radix": "minimalist dark crypto banner, blue geometric network nodes, dark background, professional web3 aesthetic, no text",
-    "guide": "minimalist dark crypto banner, compass and map silhouette on dark background, gold accent, professional web3 aesthetic, no text",
-    "risks": "minimalist dark crypto banner, warning triangle with lightning bolt, dark red tones, professional web3 aesthetic, no text",
-    "psychology": "minimalist dark crypto banner, brain silhouette with circuit lines, dark neon blue, professional web3 aesthetic, no text",
-    "millionaires": "minimalist dark crypto banner, five gold coins on pedestals, dark dramatic background, professional web3 aesthetic, no text",
-}
-DEFAULT_IMAGE_PROMPT = "minimalist dark crypto blog banner, rocket silhouette and coin symbols, dark space background, professional web3 aesthetic, no text"
 
 HYDRA_TOPICS = [
     ("HYDRA", "Write an educational article about the HYDRA memecoin on Radix DLT. Focus on the weekly burn mechanism (100,000 HYDRA burned every week), the HydraSwap DEX, and what makes it unique as a community-driven token launched on February 8, 2026."),
@@ -167,7 +248,6 @@ else:
     pool = MARKET_TOPICS + MEMECOIN_TOPICS
 
 image_key, topic = random.choice(pool)
-image_prompt = IMAGE_PROMPTS.get(image_key, DEFAULT_IMAGE_PROMPT)
 
 market_context = ""
 coin_map = {
@@ -382,10 +462,10 @@ post["readingTime"] = max(1, round(word_count / 200))
 post["author"] = "HYDRA"
 post["category"] = category
 
-encoded_prompt = urllib.parse.quote(image_prompt)
-image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true&seed={random.randint(1, 99999)}"
+# --- Fetch cover image from Unsplash ---
+print(f"Fetching Unsplash image for topic key: {image_key}")
+image_url = fetch_unsplash_image(image_key)
 post["coverImage"] = image_url
-print(f"Image key: {image_key}")
 print(f"Cover image URL: {image_url}")
 
 # --- Save post JSON ---
