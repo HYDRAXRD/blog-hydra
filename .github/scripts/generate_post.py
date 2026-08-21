@@ -448,76 +448,236 @@ def build_market_context(image_key: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Unsplash image fetch
+# Unsplash image fetch — with used-image deduplication
 # ---------------------------------------------------------------------------
+
+def _load_used_image_ids() -> set:
+    """Read posts-index.json and extract all Unsplash photo IDs already in use."""
+    index_path = "public/posts-index.json"
+    if not os.path.exists(index_path):
+        return set()
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            posts = json.load(f)
+        used = set()
+        for p in posts:
+            url = p.get("coverImage", "")
+            # Unsplash photo IDs appear as "photo-XXXX" or in ixid=M3w...
+            # Extract the 'photo_<id>' segment from raw URL or the 'ixid' param
+            m = re.search(r"photo-([A-Za-z0-9_-]+)\?", url)
+            if m:
+                used.add(m.group(1))
+                continue
+            m = re.search(r"ixid=M3[^&]+", url)
+            if m:
+                used.add(m.group(0))
+        return used
+    except Exception as e:
+        print(f"Warning: could not load used image IDs: {e}")
+        return set()
+
 
 def fetch_unsplash_image(query: str, width: int = 1200, height: int = 630) -> str:
     if not unsplash_key:
         print("WARNING: UNSPLASH_API_KEY not set, using fallback image")
         return _unsplash_fallback(query)
 
+    # Multiple alternative queries per topic key — rotated randomly to maximise variety
     QUERY_MAP = {
-        "HYDRA":       "blockchain crypto dragon dark",
-        "HydraSwap":   "decentralized exchange cryptocurrency dark",
-        "Dogecoin":    "dogecoin shiba inu cryptocurrency",
-        "DOGE":        "dogecoin shiba inu cryptocurrency",
-        "Shiba":       "shiba inu dog cryptocurrency",
-        "SHIB":        "shiba inu dog cryptocurrency",
-        "Pepe":        "frog meme cryptocurrency digital",
-        "PEPE":        "frog meme cryptocurrency digital",
-        "WIF":         "dog hat cryptocurrency solana",
-        "dogwifhat":   "dog hat cryptocurrency solana",
-        "BONK":        "dog cryptocurrency solana airdrop",
-        "FLOKI":       "viking warrior cryptocurrency",
-        "memecoin":    "meme cryptocurrency rocket moon",
-        "market":      "cryptocurrency market chart bitcoin",
-        "DeFi":        "decentralized finance blockchain network",
-        "Radix":       "blockchain network nodes blue",
-        "guide":       "crypto guide compass research",
-        "risks":       "risk warning cryptocurrency danger",
-        "psychology":  "trading psychology brain decision",
-        "millionaires":"crypto wealth gold coins success",
-        "trending":    "cryptocurrency trending chart viral",
-        "bitcoin":     "bitcoin gold digital currency",
-        "culture":     "internet meme culture digital art",
-        "history":     "crypto history timeline blockchain",
+        "HYDRA": [
+            "blockchain crypto dragon dark",
+            "hydra serpent mythology dark fantasy",
+            "crypto defi network futuristic neon",
+            "dragon mythology digital art dark",
+            "blockchain decentralized technology glowing",
+            "radix network nodes blockchain abstract",
+        ],
+        "HydraSwap": [
+            "decentralized exchange cryptocurrency dark",
+            "defi swap liquidity crypto abstract",
+            "crypto trading interface futuristic",
+        ],
+        "Dogecoin": [
+            "dogecoin shiba inu cryptocurrency",
+            "doge meme dog finance coin",
+            "shiba inu dog funny crypto",
+        ],
+        "DOGE": [
+            "dogecoin shiba inu cryptocurrency",
+            "doge meme dog finance coin",
+        ],
+        "Shiba": [
+            "shiba inu dog cryptocurrency",
+            "shiba dog golden crypto token",
+        ],
+        "SHIB": [
+            "shiba inu dog cryptocurrency",
+            "shiba dog golden crypto token",
+        ],
+        "Pepe": [
+            "frog meme cryptocurrency digital",
+            "green frog internet meme art",
+            "pepe frog digital culture",
+        ],
+        "PEPE": [
+            "frog meme cryptocurrency digital",
+            "green frog internet meme art",
+        ],
+        "WIF": [
+            "dog hat cryptocurrency solana",
+            "dog wearing hat funny meme",
+        ],
+        "dogwifhat": [
+            "dog hat cryptocurrency solana",
+            "dog wearing hat funny meme",
+        ],
+        "BONK": [
+            "dog cryptocurrency solana airdrop",
+            "bonk dog meme solana crypto",
+        ],
+        "FLOKI": [
+            "viking warrior cryptocurrency",
+            "viking helmet norse mythology",
+        ],
+        "memecoin": [
+            "meme cryptocurrency rocket moon",
+            "crypto meme community coins viral",
+        ],
+        "market": [
+            "cryptocurrency market chart bitcoin",
+            "crypto trading chart analysis dark",
+            "bitcoin market bull run abstract",
+        ],
+        "DeFi": [
+            "decentralized finance blockchain network",
+            "defi protocol smart contract futuristic",
+        ],
+        "Radix": [
+            "blockchain network nodes blue",
+            "radix technology network abstract blue",
+        ],
+        "guide": [
+            "crypto guide compass research",
+            "research investment guide map direction",
+        ],
+        "risks": [
+            "risk warning cryptocurrency danger",
+            "crypto risk caution red warning",
+        ],
+        "psychology": [
+            "trading psychology brain decision",
+            "mind decision finance stress trading",
+        ],
+        "millionaires": [
+            "crypto wealth gold coins success",
+            "rich success wealth cryptocurrency gold",
+        ],
+        "trending": [
+            "cryptocurrency trending chart viral",
+            "trending crypto coins social media",
+        ],
+        "bitcoin": [
+            "bitcoin gold digital currency",
+            "bitcoin coin glowing dark abstract",
+            "bitcoin halving blockchain digital art",
+        ],
+        "culture": [
+            "internet meme culture digital art",
+            "meme culture online community viral",
+        ],
+        "history": [
+            "crypto history timeline blockchain",
+            "cryptocurrency history milestones abstract",
+        ],
     }
 
-    search_query = QUERY_MAP.get(query, f"{query} cryptocurrency")
+    query_list = QUERY_MAP.get(query, [f"{query} cryptocurrency"])
+    search_query = random.choice(query_list)
     print(f"Fetching Unsplash image for query: '{search_query}'")
 
-    try:
-        params = urllib.parse.urlencode({
-            "query": search_query,
-            "orientation": "landscape",
-            "per_page": 10,
-            "content_filter": "high",
-        })
-        url = f"https://api.unsplash.com/search/photos?{params}"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": f"Client-ID {unsplash_key}",
-                "Accept-Version": "v1",
-            }
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
+    used_ids = _load_used_image_ids()
+    print(f"Already used image IDs: {len(used_ids)}")
 
-        results = data.get("results", [])
-        if not results:
-            print(f"No Unsplash results for '{search_query}', using fallback")
-            return _unsplash_fallback(query)
+    # Try up to 3 random pages to find a fresh image
+    pages_to_try = random.sample(range(1, 4), min(3, 3))
 
-        photo = random.choice(results[:5])
-        raw_url = photo["urls"]["raw"]
-        image_url = f"{raw_url}&w={width}&h={height}&fit=crop&auto=format&q=80"
-        print(f"Unsplash image selected: {photo.get('id')} by {photo.get('user', {}).get('name', 'unknown')}")
-        return image_url
+    for page in pages_to_try:
+        try:
+            params = urllib.parse.urlencode({
+                "query": search_query,
+                "orientation": "landscape",
+                "per_page": 30,
+                "page": page,
+                "content_filter": "high",
+            })
+            url = f"https://api.unsplash.com/search/photos?{params}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Client-ID {unsplash_key}",
+                    "Accept-Version": "v1",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
 
-    except Exception as e:
-        print(f"Unsplash fetch failed: {e}, using fallback")
-        return _unsplash_fallback(query)
+            results = data.get("results", [])
+            if not results:
+                print(f"No Unsplash results for '{search_query}' page {page}")
+                continue
+
+            # Filter out already-used photos
+            fresh = [r for r in results if r["id"] not in used_ids]
+            if not fresh:
+                print(f"All {len(results)} results on page {page} already used, trying next page...")
+                continue
+
+            photo = random.choice(fresh[:10])
+            raw_url = photo["urls"]["raw"]
+            image_url = f"{raw_url}&w={width}&h={height}&fit=crop&auto=format&q=80"
+            print(f"Unsplash image selected: {photo.get('id')} by {photo.get('user', {}).get('name', 'unknown')}")
+            return image_url
+
+        except Exception as e:
+            print(f"Unsplash fetch failed (page {page}): {e}")
+            continue
+
+    # If all pages exhausted, try a different query from the list as last resort
+    if len(query_list) > 1:
+        fallback_query = random.choice([q for q in query_list if q != search_query])
+        print(f"Trying fallback query: '{fallback_query}'")
+        try:
+            params = urllib.parse.urlencode({
+                "query": fallback_query,
+                "orientation": "landscape",
+                "per_page": 30,
+                "page": 1,
+                "content_filter": "high",
+            })
+            url = f"https://api.unsplash.com/search/photos?{params}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Client-ID {unsplash_key}",
+                    "Accept-Version": "v1",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+            results = data.get("results", [])
+            fresh = [r for r in results if r["id"] not in used_ids]
+            pool = fresh[:10] if fresh else results[:10]
+            if pool:
+                photo = random.choice(pool)
+                raw_url = photo["urls"]["raw"]
+                image_url = f"{raw_url}&w={width}&h={height}&fit=crop&auto=format&q=80"
+                print(f"Unsplash fallback query image: {photo.get('id')} by {photo.get('user', {}).get('name', 'unknown')}")
+                return image_url
+        except Exception as e:
+            print(f"Unsplash fallback query failed: {e}")
+
+    print("All Unsplash attempts exhausted, using static fallback")
+    return _unsplash_fallback(query)
 
 
 def _unsplash_fallback(topic_key: str) -> str:
