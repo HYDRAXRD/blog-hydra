@@ -34,6 +34,7 @@ jobs:
         id: generate
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
         run: |
           set -e
           python3 .github/scripts/generate_post.py | tee /tmp/gen.txt
