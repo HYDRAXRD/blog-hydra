@@ -1,0 +1,44 @@
+name: Update Post Images (Unsplash)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Update all post images via Unsplash
+        env:
+          UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+        run: python .github/scripts/update_images.py
+
+      - name: Commit updated images
+        run: |
+          git config user.name "HYDRA Bot"
+          git config user.email "bot@hydraxrd.com"
+          git fetch origin main
+          git reset --hard origin/main
+          python .github/scripts/update_images.py
+          git add src/data/posts/ public/posts-index.json
+          if git diff --staged --quiet; then
+            echo "No image changes to commit."
+          else
+            git commit -m "chore: update all post cover images via Unsplash"
+            git push origin main
+            echo "Images updated and pushed."
+          fi
+        env:
+          UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
