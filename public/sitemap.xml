@@ -4,21 +4,28 @@
   <!-- Static pages -->
   <url>
     <loc>https://hydraxrd.com/blog</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
+    <loc>https://hydraxrd.com/blog/post/how-to-buy-hydra-on-radix-dlt-hydraswap-guide</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
     <loc>https://hydraxrd.com/blog/post/the-frog-that-hopped-to-the-top-pepes-rise-in-2023</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://hydraxrd.com/blog/post/pumpfun-pump-token-from-meme-launchpad-to-trending-memecoin</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -32,7 +39,7 @@
 
   <url>
     <loc>https://hydraxrd.com/blog/post/hydraswap-radix-powered-dex-fueling-hydra-community</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -60,28 +67,28 @@
 
   <url>
     <loc>https://hydraxrd.com/blog/post/wif-takes-the-crown-how-dogwifhat-became-solanas-billion-dollar-meme-sensation</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://hydraxrd.com/blog/post/hydra-community-owned-memecoin-radix-deflationary</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://hydraxrd.com/blog/post/pepe-the-4chan-frogs-wild-ride-to-1-2b-market-cap</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://hydraxrd.com/blog/post/wif-hat-wearing-dog-solana-memecoin-phenomenon</loc>
-    <lastmod>2026-08-24</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
