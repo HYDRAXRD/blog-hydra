@@ -3,6 +3,9 @@ import { Clock, TrendingUp } from "lucide-react";
 import { formatDate, type Post } from "@/data/posts";
 
 const PostCard = ({ post, featured = false }: { post: Post; featured?: boolean }) => {
+  // Guarantee a displayable date even if the field is absent in older posts
+  const displayDate = post.date && post.date.trim() ? post.date : new Date().toISOString().slice(0, 10);
+
   return (
     <article
       className={`group relative overflow-hidden rounded-xl border border-border/60 bg-card/60 backdrop-blur transition-all hover:-translate-y-1 hover:border-primary/50 hover:box-glow ${
@@ -52,7 +55,7 @@ const PostCard = ({ post, featured = false }: { post: Post; featured?: boolean }
         <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{post.excerpt}</p>
 
         <div className="mt-auto flex items-center gap-3 pt-2 text-xs text-muted-foreground">
-          <span>{formatDate(post.date)}</span>
+          <span>{formatDate(displayDate)}</span>
           <span className="opacity-40">•</span>
           <span className="inline-flex items-center gap-1">
             <Clock size={12} /> {post.readingMinutes} min
