@@ -905,11 +905,14 @@ user_msg = (
 # LLM call via OpenRouter
 # ---------------------------------------------------------------------------
 
+# FIX: Reordered models — most reliable free models first.
+# "openrouter/free" is last because it often returns safety filter messages
+# ("User Safety: safe") instead of actual JSON content, causing parse errors.
 MODELS = [
-    "openrouter/free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
     "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
     "nvidia/nemotron-3-nano-30b-a3b:free",
+    "openrouter/free",
 ]
 
 response_data = None
@@ -947,6 +950,11 @@ for model in MODELS:
             print(f"Model {model} returned empty, trying next...")
             continue
         content = content.strip()
+        # FIX: Reject responses that are clearly not JSON (e.g. "User Safety: safe").
+        # A valid article response must contain a JSON object starting with "{".
+        if not content.startswith("{") and "{" not in content:
+            print(f"Model {model} returned non-JSON content, skipping: {content[:120]}")
+            continue
         response_data = data
         print(f"Success with {model} ({len(content)} chars)")
         break
