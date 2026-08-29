@@ -905,12 +905,15 @@ user_msg = (
 # LLM call via OpenRouter
 # ---------------------------------------------------------------------------
 
-# FIX: Reordered models — most reliable free models first.
+# Models ordered by reliability — most consistent free models first.
+# meta-llama/llama-3.3-70b and mistral-small added as reliable alternatives.
 # "openrouter/free" is last because it often returns safety filter messages
-# ("User Safety: safe") instead of actual JSON content, causing parse errors.
+# (e.g. "User Safety: safe") instead of actual JSON content, causing parse errors.
 MODELS = [
     "google/gemma-4-31b-it:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
     "nvidia/nemotron-3-nano-30b-a3b:free",
     "openrouter/free",
 ]
@@ -950,10 +953,18 @@ for model in MODELS:
             print(f"Model {model} returned empty, trying next...")
             continue
         content = content.strip()
-        # FIX: Reject responses that are clearly not JSON (e.g. "User Safety: safe").
-        # A valid article response must contain a JSON object starting with "{".
-        if not content.startswith("{") and "{" not in content:
+        # Reject responses that are clearly not JSON.
+        # Valid responses must contain a JSON object with "{".
+        # This rejects safety filter messages like "User Safety: safe",
+        # plain text responses, and other non-JSON output.
+        if "{" not in content:
             print(f"Model {model} returned non-JSON content, skipping: {content[:120]}")
+            continue
+        # Also reject if content starts with obvious non-JSON markers
+        lower_content = content.lower().lstrip()
+        non_json_prefixes = ("user safety", "i cannot", "i'm sorry", "as an ai", "sorry,")
+        if any(lower_content.startswith(p) for p in non_json_prefixes):
+            print(f"Model {model} returned refusal/safety message, skipping: {content[:120]}")
             continue
         response_data = data
         print(f"Success with {model} ({len(content)} chars)")
@@ -1007,6 +1018,11 @@ if final_slug in existing_slugs:
 
 post["slug"] = final_slug
 post["id"] = final_slug
+
+# FIX: Guarantee the date field is always set, even if the model omitted it.
+if not post.get("date"):
+    post["date"] = today
+    print(f"Date field was missing; set to: {today}")
 
 word_count = len(post.get("content", "").split())
 post["readingTime"] = max(1, round(word_count / 200))
