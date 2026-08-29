@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timezone
 import sys
 import random
+import time
 
 now = datetime.now(timezone.utc)
 today = now.strftime("%Y-%m-%d")
@@ -462,8 +463,6 @@ def _load_used_image_ids() -> set:
         used = set()
         for p in posts:
             url = p.get("coverImage", "")
-            # Unsplash photo IDs appear as "photo-XXXX" or in ixid=M3w...
-            # Extract the 'photo_<id>' segment from raw URL or the 'ixid' param
             m = re.search(r"photo-([A-Za-z0-9_-]+)\?", url)
             if m:
                 used.add(m.group(1))
@@ -482,7 +481,6 @@ def fetch_unsplash_image(query: str, width: int = 1200, height: int = 630) -> st
         print("WARNING: UNSPLASH_API_KEY not set, using fallback image")
         return _unsplash_fallback(query)
 
-    # Multiple alternative queries per topic key — rotated randomly to maximise variety
     QUERY_MAP = {
         "HYDRA": [
             "blockchain crypto dragon dark",
@@ -598,7 +596,6 @@ def fetch_unsplash_image(query: str, width: int = 1200, height: int = 630) -> st
     used_ids = _load_used_image_ids()
     print(f"Already used image IDs: {len(used_ids)}")
 
-    # Try up to 3 random pages to find a fresh image
     pages_to_try = random.sample(range(1, 4), min(3, 3))
 
     for page in pages_to_try:
@@ -626,7 +623,6 @@ def fetch_unsplash_image(query: str, width: int = 1200, height: int = 630) -> st
                 print(f"No Unsplash results for '{search_query}' page {page}")
                 continue
 
-            # Filter out already-used photos
             fresh = [r for r in results if r["id"] not in used_ids]
             if not fresh:
                 print(f"All {len(results)} results on page {page} already used, trying next page...")
@@ -642,7 +638,6 @@ def fetch_unsplash_image(query: str, width: int = 1200, height: int = 630) -> st
             print(f"Unsplash fetch failed (page {page}): {e}")
             continue
 
-    # If all pages exhausted, try a different query from the list as last resort
     if len(query_list) > 1:
         fallback_query = random.choice([q for q in query_list if q != search_query])
         print(f"Trying fallback query: '{fallback_query}'")
@@ -902,7 +897,7 @@ user_msg = (
 )
 
 # ---------------------------------------------------------------------------
-# LLM call via OpenRouter
+# LLM call via OpenRouter — up to 5 attempts across all models
 # ---------------------------------------------------------------------------
 
 # Models ordered by reliability — most consistent free models first.
@@ -918,11 +913,24 @@ MODELS = [
     "openrouter/free",
 ]
 
+MAX_ATTEMPTS = 5
 response_data = None
 content = ""
+attempt = 0
 
-for model in MODELS:
-    print(f"Trying model: {model}")
+# Retry loop: up to MAX_ATTEMPTS total tries cycling through models.
+# On each attempt we pick the next model in the list (wraps around if needed).
+# A short delay is added between attempts to avoid hitting rate limits.
+while attempt < MAX_ATTEMPTS and not response_data:
+    model = MODELS[attempt % len(MODELS)]
+    attempt += 1
+    print(f"Attempt {attempt}/{MAX_ATTEMPTS} — model: {model}")
+
+    if attempt > 1:
+        wait_secs = 3 * (attempt - 1)
+        print(f"Waiting {wait_secs}s before retry...")
+        time.sleep(wait_secs)
+
     payload = json.dumps({
         "model": model,
         "messages": [
@@ -950,32 +958,30 @@ for model in MODELS:
         msg = data.get("choices", [{}])[0].get("message", {})
         content = msg.get("content") or msg.get("reasoning") or ""
         if not content or not content.strip():
-            print(f"Model {model} returned empty, trying next...")
+            print(f"Attempt {attempt}: model {model} returned empty content, retrying...")
             continue
         content = content.strip()
         # Reject responses that are clearly not JSON.
-        # Valid responses must contain a JSON object with "{".
-        # This rejects safety filter messages like "User Safety: safe",
-        # plain text responses, and other non-JSON output.
         if "{" not in content:
-            print(f"Model {model} returned non-JSON content, skipping: {content[:120]}")
+            print(f"Attempt {attempt}: model {model} returned non-JSON, skipping: {content[:120]}")
             continue
-        # Also reject if content starts with obvious non-JSON markers
         lower_content = content.lower().lstrip()
         non_json_prefixes = ("user safety", "i cannot", "i'm sorry", "as an ai", "sorry,")
         if any(lower_content.startswith(p) for p in non_json_prefixes):
-            print(f"Model {model} returned refusal/safety message, skipping: {content[:120]}")
+            print(f"Attempt {attempt}: model {model} returned refusal/safety message, retrying: {content[:120]}")
             continue
         response_data = data
-        print(f"Success with {model} ({len(content)} chars)")
-        break
+        print(f"Attempt {attempt}: SUCCESS with {model} ({len(content)} chars)")
     except urllib.error.HTTPError as e:
         body = e.read().decode()
-        print(f"Model {model} failed: {e.code} - {body[:200]}")
+        print(f"Attempt {attempt}: HTTP error from {model}: {e.code} - {body[:200]}")
+        continue
+    except Exception as e:
+        print(f"Attempt {attempt}: unexpected error with {model}: {e}")
         continue
 
 if not response_data or not content:
-    print("All models failed. Exiting.")
+    print(f"All {MAX_ATTEMPTS} attempts failed. Exiting.")
     sys.exit(1)
 
 # ---------------------------------------------------------------------------
@@ -1019,7 +1025,7 @@ if final_slug in existing_slugs:
 post["slug"] = final_slug
 post["id"] = final_slug
 
-# FIX: Guarantee the date field is always set, even if the model omitted it.
+# FIX: Guarantee the date field is always set to today, even if the model omitted it.
 if not post.get("date"):
     post["date"] = today
     print(f"Date field was missing; set to: {today}")
