@@ -930,7 +930,88 @@ def _unsplash_fallback(topic_key: str) -> str:
         "SHIB":        "https://images.unsplash.com/photo-1620321023374-d1a68fbc720d?w=1200&h=630&fit=crop&auto=format",
         "Pepe":        "https://images.unsplash.com/photo-1639762681057-408e52192e55?w=1200&h=630&fit=crop&auto=format",
         "PEPE":        "https://images.unsplash.com/photo-1639762681057-408e52192e55?w=1200&h=630&fit=crop&auto=format",
-        "WIF":         "https://images.unsplash.com/photo-1645731012575-3799282e8da5?w=1200&h=630&fit=crop&auto=format",
+.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys.github/scripts/generate_post.py        
+import os
+import json
+import urllib.request
+import urllib.error
+import urllib.parse
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+import sys        "WIF":         "https://images.unsplash.com/photo-1645731012575-3799282e8da5?w=1200&h=630&fit=crop&auto=format",
         "BONK":        "https://images.unsplash.com/photo-1643101809204-6fb869816dbe?w=1200&h=630&fit=crop&auto=format",
         "FLOKI":       "https://images.unsplash.com/photo-1589254065878-42c9da997008?w=1200&h=630&fit=crop&auto=format",
         "memecoin":    "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1200&h=630&fit=crop&auto=format",
@@ -1073,14 +1154,16 @@ if pool == HYDRA_TOPICS and HYDRA_FACTS:
 # appropriate (e.g. when discussing how to buy or trade the coin).
 # ---------------------------------------------------------------------------
 EXCHANGE_POOL = [
-    {"name": "Binance",   "url": "https://www.binance.com",         "note": "the world's largest crypto exchange by trading volume"},
-    {"name": "Coinbase",  "url": "https://www.coinbase.com",        "note": "the most widely used exchange in the United States"},
-    {"name": "Kraken",    "url": "https://www.kraken.com",          "note": "one of the longest-running and most trusted exchanges in the industry"},
-    {"name": "KuCoin",    "url": "https://www.kucoin.com",          "note": "a popular exchange known for its wide selection of altcoins and memecoins"},
-    {"name": "OKX",       "url": "https://www.okx.com",            "note": "a major global exchange with strong derivatives and spot markets"},
-    {"name": "Bybit",     "url": "https://www.bybit.com",          "note": "a fast-growing exchange popular among traders for its competitive fees"},
-    {"name": "Gate.io",   "url": "https://www.gate.io",            "note": "an exchange well known for listing early-stage and emerging tokens"},
-    {"name": "MEXC",      "url": "https://www.mexc.com",           "note": "an exchange frequently among the first to list new memecoins and small-cap tokens"},
+    {"name": "Binance", "url": "https://www.binance.com/activity/referral-entry/CPA?ref=CPA_00ULM3PVBU", "note": "the world's largest crypto exchange by trading volume"},
+    {"name": "Binance", "url": "https://www.binance.com/activity/referral-entry/CPA?ref=CPA_00ULM3PVBU", "note": "the world's largest crypto exchange by trading volume"},
+    {"name": "Coinbase", "url": "https://coinbase.com/join/48YKTHQ?src=ios-link", "note": "the most widely used exchange in the United States"},
+    {"name": "OKX", "url": "https://okx.com/pt-br/join/3102874", "note": "a major global exchange with strong derivatives and spot markets"},
+    {"name": "MEXC", "url": "https://s.mexc.com/referral/7zWMbHQ5uu", "note": "an exchange frequently among the first to list new memecoins and small-cap tokens"},
+    {"name": "Bybit", "url": "https://www.bybit.com/invite?ref=4RQBXK&medium=referral&utm_campaign=evergreen&share_to=post", "note": "a fast-growing exchange popular among traders for its competitive fees"},
+    {"name": "CoinEx", "url": "https://www.coinex.com/register?rc=qg926&channel=Referral", "note": "a global exchange known for its broad altcoin coverage and low fees"},
+    {"name": "Gate.io", "url": "https://www.gate.com/pt-br/referral/earn-together/invite/UllNAVkN?ref=UllNAVkN&ref_type=103&utm_cmp=rXJBDjtJ&activity_id=1785938037929", "note": "an exchange well known for listing early-stage and emerging tokens"},
+    {"name": "KuCoin", "url": "https://www.kucoin.com/r/rf/QBSG7E7W", "note": "a popular exchange known for its wide selection of altcoins and memecoins"},
+    {"name": "Crypto.com", "url": "https://crypto.com/app/se52rhs8r9", "note": "an all-in-one crypto platform with trading, staking, and card features"},
 ]
 exchange = random.choice(EXCHANGE_POOL)
 exchange_instruction = (
