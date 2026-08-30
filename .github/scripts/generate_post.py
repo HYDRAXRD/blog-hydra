@@ -119,7 +119,7 @@ def fetch_google_trends_general() -> list:
       2. United States daily trending searches
 
     Returns a list of up to 20 term strings, empty list on any failure.
-    Fallback to random topic selection is handled by pick_topic_from_signals().
+    Fallback to curated FALLBACK_TOPICS is handled by pick_topic_from_signals().
     """
     try:
         import subprocess
@@ -131,7 +131,7 @@ def fetch_google_trends_general() -> list:
 
         all_terms = []
 
-        # --- 1. Worldwide real-time trending searches ---
+        # --- 1. Worldwide real-time trending searches (proxy via US endpoint) ---
         try:
             pytrends_ww = TrendReq(hl="en-US", tz=0, timeout=(10, 30), retries=2, backoff_factor=0.5)
             rt_worldwide = pytrends_ww.realtime_trending_searches(pn="US")
@@ -170,7 +170,7 @@ def fetch_google_trends_general() -> list:
         return result[:20]
 
     except Exception as e:
-        print(f"[pytrends] Full fetch failed (non-critical) — random fallback will be used: {e}")
+        print(f"[pytrends] Full fetch failed (non-critical) — curated fallback will be used: {e}")
         return []
 
 
@@ -227,13 +227,13 @@ def build_trend_signals() -> tuple:
     if google_terms:
         lines.append("\n--- GOOGLE TRENDS: Worldwide + US general trending searches right now ---")
         for t in google_terms:
-            lines.append(f"  • {t}")
+            lines.append(f"  \u2022 {t}")
         lines.append("(These are the top trending terms on Google globally and in the US in the last 24h)")
 
     if rss_headlines:
         lines.append("\n--- LATEST NEWS HEADLINES (CoinTelegraph / CryptoSlate / Decrypt) ---")
         for h in rss_headlines:
-            lines.append(f"  • {h}")
+            lines.append(f"  \u2022 {h}")
         lines.append("(These headlines reflect what the crypto world is talking about right now)")
 
     formatted = "\n".join(lines) if lines else ""
@@ -289,17 +289,39 @@ def score_topic(image_key: str, google_terms: list, rss_headlines: list) -> int:
     return score
 
 
+# ---------------------------------------------------------------------------
+# Curated fallback topics — used when Google Trends + RSS return nothing
+# ---------------------------------------------------------------------------
+
+# Each entry: (image_key, topic_prompt)
+# These are the safe editorial defaults when no live signal is available.
+FALLBACK_TOPICS = [
+    ("memecoin",    "Write about the most promising memecoins of 2026: which projects have real community backing, what tokenomics set them apart, and why 2026 could be another landmark year for meme-driven crypto. Use current market data provided."),
+    ("guide",       "Write a comprehensive guide explaining how cryptocurrency staking works: proof-of-stake mechanics, how validators earn rewards, the difference between custodial and non-custodial staking, and the risks involved. Reference current market data where relevant."),
+    ("bitcoin",     "Write a balanced analysis of Bitcoin's current market position: is it heading up or heading for a correction? Use the global market data, BTC dominance figures, and Google Trends signals provided to build a data-driven narrative."),
+    ("guide",       "Write a guide to the best cryptocurrency exchanges for beginners in 2026: what to look for in fees, security, available coins, ease of use, and customer support. Reference the exchanges that are currently relevant."),
+    ("DeFi",        "Write an accessible explainer on what DeFi (decentralized finance) is and how everyday people can earn yield from their crypto holdings. Cover liquidity provision, lending protocols, and the risks involved. Use current DeFi volume data provided."),
+    ("market",      "Write a detailed comparison between Solana and Ethereum in 2026: transaction speed, fees, developer activity, DeFi TVL, and which ecosystem is better positioned for the next market cycle. Use current market data provided."),
+    ("risks",       "Write an honest, educational article about how to identify rug pulls and scams in the crypto space: red flags in tokenomics, anonymous teams, honeypot contracts, fake trading volume, and how to protect yourself. Use current market data as real examples."),
+    ("memecoin",    "Write about GameFi and play-to-earn crypto games: how they work, which projects are leading in 2026, the economic models behind in-game tokens, and whether GameFi is a sustainable asset class. Reference current market data."),
+]
+
+
 def pick_topic_from_signals(pool: list, google_terms: list, rss_headlines: list) -> tuple:
     """
     Score every entry in the pool against live trend signals and return
     the highest-scoring (image_key, topic_prompt) pair.
-    Falls back to random.choice if all scores are zero OR if no live signals
-    are available (Google Trends and RSS both returned nothing).
-    Ties are broken randomly to ensure variety.
+
+    Falls back to a RANDOM choice from FALLBACK_TOPICS (curated editorial
+    defaults) if:
+      - Both Google Trends and RSS returned nothing, OR
+      - All scored topics in the pool returned zero signal.
+
+    Ties at the top score are broken randomly to ensure variety.
     """
     if not google_terms and not rss_headlines:
-        chosen = random.choice(pool)
-        print(f"[fallback] No live signals — random topic selected: [{chosen[0]}]")
+        chosen = random.choice(FALLBACK_TOPICS)
+        print(f"[fallback] No live signals — curated fallback topic selected: [{chosen[0]}]")
         return chosen
 
     scored = []
@@ -312,8 +334,8 @@ def pick_topic_from_signals(pool: list, google_terms: list, rss_headlines: list)
     max_score = max(s for s, _ in scored)
 
     if max_score == 0:
-        chosen = random.choice(pool)
-        print(f"[fallback] All scores are 0 — random topic selected: [{chosen[0]}]")
+        chosen = random.choice(FALLBACK_TOPICS)
+        print(f"[fallback] All pool scores are 0 — curated fallback topic selected: [{chosen[0]}]")
         return chosen
 
     # Collect all entries tied at the top score and pick randomly among them
@@ -977,7 +999,7 @@ print("Fetching general trend signals (Google Trends worldwide+US + RSS) to guid
 trend_signals_text, google_terms, rss_headlines = build_trend_signals()
 
 # ---------------------------------------------------------------------------
-# STEP 2: Pick topic driven by live signals (random fallback if no signals)
+# STEP 2: Pick topic driven by live signals (curated fallback if no signals)
 # ---------------------------------------------------------------------------
 print("Scoring topic pool against live signals...")
 image_key, topic = pick_topic_from_signals(pool, google_terms, rss_headlines)
