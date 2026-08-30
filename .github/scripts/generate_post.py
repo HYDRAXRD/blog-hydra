@@ -938,7 +938,7 @@ while attempt < MAX_ATTEMPTS and not response_data:
             {"role": "user", "content": user_msg}
         ],
         "temperature": 0.7,
-        "max_tokens": 4500
+        "max_tokens": 8000
     }).encode()
 
     req = urllib.request.Request(
