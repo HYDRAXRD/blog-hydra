@@ -22,3 +22,5 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+<!-- redeploy: 2026-08-30 -->
