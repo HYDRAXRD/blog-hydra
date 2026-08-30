@@ -1067,6 +1067,33 @@ hydra_instruction = ""
 if pool == HYDRA_TOPICS and HYDRA_FACTS:
     hydra_instruction = f"\n\nMANDATORY: Official HYDRA Facts - use ONLY these, never invent:\n{HYDRA_FACTS}\n"
 
+# ---------------------------------------------------------------------------
+# Exchange reference pool — one is picked at random for each article
+# The writer weaves it in naturally, only once, and only where contextually
+# appropriate (e.g. when discussing how to buy or trade the coin).
+# ---------------------------------------------------------------------------
+EXCHANGE_POOL = [
+    {"name": "Binance",   "url": "https://www.binance.com",         "note": "the world's largest crypto exchange by trading volume"},
+    {"name": "Coinbase",  "url": "https://www.coinbase.com",        "note": "the most widely used exchange in the United States"},
+    {"name": "Kraken",    "url": "https://www.kraken.com",          "note": "one of the longest-running and most trusted exchanges in the industry"},
+    {"name": "KuCoin",    "url": "https://www.kucoin.com",          "note": "a popular exchange known for its wide selection of altcoins and memecoins"},
+    {"name": "OKX",       "url": "https://www.okx.com",            "note": "a major global exchange with strong derivatives and spot markets"},
+    {"name": "Bybit",     "url": "https://www.bybit.com",          "note": "a fast-growing exchange popular among traders for its competitive fees"},
+    {"name": "Gate.io",   "url": "https://www.gate.io",            "note": "an exchange well known for listing early-stage and emerging tokens"},
+    {"name": "MEXC",      "url": "https://www.mexc.com",           "note": "an exchange frequently among the first to list new memecoins and small-cap tokens"},
+]
+exchange = random.choice(EXCHANGE_POOL)
+exchange_instruction = (
+    f"\n\nEXCHANGE MENTION GUIDELINE:\n"
+    f"Somewhere in the article — and only once — mention {exchange['name']} ({exchange['note']}) "
+    f"as a place where readers could find or trade the coin or asset being discussed, if it is listed there. "
+    f"The mention must feel completely natural and editorial, as if you are informing the reader where to look, "
+    f"not advertising. Use a masked markdown hyperlink: [{exchange['name']}]({exchange['url']}). "
+    f"Do NOT include it if the article topic makes the mention forced or out of place "
+    f"(e.g. a pure cultural/history piece with no trading angle). "
+    f"Never mention more than one exchange per article."
+)
+
 system_msg = """You are the senior English language content writer, researcher, and editorial strategist for HYDRA Chronicles, the official blog of HYDRA, published at hydraxrd.com/blog.
 
 Your mission is to create accurate, engaging, well-researched, human-sounding articles about memecoins, cryptocurrency culture, Bitcoin, crypto trends, blockchain ecosystems, and the broader cryptocurrency market.
@@ -1097,6 +1124,9 @@ When discussing Radix DLT, use only verifiable information. Do not invent techni
 BITCOIN
 Articles may discuss Bitcoin's history, market movements, narratives, major milestones, cultural influence, relationship with altcoins and memecoins, and market cycles. Never portray Bitcoin as guaranteed to rise or fall. When discussing Bitcoin's price or market data, verify the information from a reliable current source.
 
+EXCHANGE MENTIONS
+When contextually appropriate — for example, when discussing how to acquire a token, where it trades, or its market accessibility — you may mention one established exchange where the asset is available. The mention must read as a natural, informative aside, not a promotional placement. Use a masked markdown hyperlink. Include only one exchange mention per article, and only when it adds genuine value to the reader. If the article has no natural trading angle, omit the exchange mention entirely.
+
 ABSOLUTE FORMATTING RULES
 NEVER use bullet points. NEVER use numbered lists. NEVER use dash-based lists. NEVER use asterisks for lists. The article must be written entirely as flowing prose organized with headings and paragraphs. Use ## for main section headings only. Never use ### or ####.
 
@@ -1126,6 +1156,7 @@ trend_block = f"\n{trend_signals_text}" if trend_signals_text else ""
 user_msg = (
     f"Today is {today}. {topic}\n"
     f"{hydra_instruction}"
+    f"{exchange_instruction}"
     f"{market_context}"
     f"{trend_block}\n\n"
     "IMPORTANT EDITORIAL INSTRUCTION: You have been given three layers of real-time signals above:\n"
