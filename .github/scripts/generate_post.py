@@ -4,6 +4,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 import sys
 import random
@@ -104,6 +105,138 @@ def format_large_number(n):
     if n >= 1_000_000:
         return f"${n / 1_000_000:.2f}M"
     return f"${n:,.0f}"
+
+
+# ---------------------------------------------------------------------------
+# Google Trends via pytrends — what people are actually searching right now
+# ---------------------------------------------------------------------------
+
+def fetch_google_trends_crypto() -> list:
+    """
+    Install pytrends at runtime (if not present) and return the top crypto
+    search keywords trending on Google in the last 24 hours.
+    Returns a list of keyword strings, empty list on any failure.
+    """
+    try:
+        import subprocess
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet", "pytrends"],
+            check=True, capture_output=True
+        )
+        from pytrends.request import TrendReq
+
+        pytrends = TrendReq(hl="en-US", tz=0, timeout=(10, 30), retries=2, backoff_factor=0.5)
+
+        # Search for crypto-related keywords to get related rising queries
+        kw_list = ["cryptocurrency", "memecoin", "bitcoin", "crypto"]
+        pytrends.build_payload(kw_list, cat=0, timeframe="now 1-d", geo="", gprop="")
+        related = pytrends.related_queries()
+
+        rising_terms = []
+        for kw in kw_list:
+            df = related.get(kw, {}).get("rising")
+            if df is not None and not df.empty:
+                for _, row in df.head(5).iterrows():
+                    term = str(row.get("query", "")).strip()
+                    if term and len(term) > 2:
+                        rising_terms.append(term)
+
+        # Also grab real-time trending searches (US)
+        try:
+            trending_rt = pytrends.realtime_trending_searches(pn="US")
+            if trending_rt is not None and not trending_rt.empty:
+                for _, row in trending_rt.head(10).iterrows():
+                    title = str(row.get("title", "")).strip()
+                    entity_names = str(row.get("entityNames", "")).strip()
+                    for term in [title, entity_names]:
+                        if any(kw in term.lower() for kw in ["crypto", "bitcoin", "coin", "token", "defi", "nft", "blockchain", "eth", "btc", "solana"]):
+                            rising_terms.append(term)
+        except Exception as e:
+            print(f"Realtime trending search failed (non-critical): {e}")
+
+        # Deduplicate, normalise
+        seen = set()
+        result = []
+        for t in rising_terms:
+            key = t.lower()
+            if key not in seen:
+                seen.add(key)
+                result.append(t)
+
+        print(f"Google Trends: {len(result)} rising crypto terms found")
+        return result[:15]
+
+    except Exception as e:
+        print(f"Google Trends fetch failed (non-critical): {e}")
+        return []
+
+
+# ---------------------------------------------------------------------------
+# RSS news feed — CoinTelegraph + CryptoSlate headlines (no API key needed)
+# ---------------------------------------------------------------------------
+
+def fetch_rss_headlines() -> list:
+    """
+    Pull the latest headlines from CoinTelegraph and CryptoSlate RSS feeds.
+    Returns a list of title strings, empty list on failure.
+    """
+    feeds = [
+        "https://cointelegraph.com/rss",
+        "https://cryptoslate.com/feed/",
+        "https://decrypt.co/feed",
+    ]
+    headlines = []
+    for feed_url in feeds:
+        try:
+            req = urllib.request.Request(
+                feed_url,
+                headers={"User-Agent": "HYDRABlog/1.0 (RSS reader)"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                raw = resp.read()
+            root = ET.fromstring(raw)
+            # RSS 2.0: channel > item > title
+            ns = ""
+            for item in root.findall(f".//{ns}item")[:8]:
+                title_el = item.find(f"{ns}title")
+                if title_el is not None and title_el.text:
+                    headlines.append(title_el.text.strip())
+        except Exception as e:
+            print(f"RSS fetch failed for {feed_url} (non-critical): {e}")
+            continue
+    print(f"RSS headlines collected: {len(headlines)}")
+    return headlines[:20]
+
+
+# ---------------------------------------------------------------------------
+# Combine all trend signals into a single context block for the prompt
+# ---------------------------------------------------------------------------
+
+def build_trend_signals() -> str:
+    """
+    Fetch Google Trends rising queries + RSS headlines and return a formatted
+    block to be injected into the LLM prompt.
+    """
+    lines = []
+
+    google_terms = fetch_google_trends_crypto()
+    if google_terms:
+        lines.append("\n--- GOOGLE TRENDS: Rising crypto search terms right now ---")
+        for t in google_terms:
+            lines.append(f"  • {t}")
+        lines.append("(These are terms people are actively searching on Google in the last 24h)")
+
+    rss_headlines = fetch_rss_headlines()
+    if rss_headlines:
+        lines.append("\n--- LATEST NEWS HEADLINES (CoinTelegraph / CryptoSlate / Decrypt) ---")
+        for h in rss_headlines:
+            lines.append(f"  • {h}")
+        lines.append("(These headlines reflect what the crypto world is talking about right now)")
+
+    if not lines:
+        return ""
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -724,7 +857,7 @@ HYDRA_TOPICS = [
 ]
 
 MEMECOIN_TOPICS = [
-    ("trending", "Using the trending coins and top memecoins data provided, identify the single most interesting memecoin currently attracting real market attention. Tell its story: where the meme or narrative came from, how the project emerged, why people started paying attention to it, and what can actually be verified about it. Do not default to Dogecoin, Shiba Inu, Pepe, Bonk, WIF or Floki unless they are genuinely leading the trending data provided. Prioritize whichever coin the data shows is actually trending right now."),
+    ("trending", "Using ALL the data provided — CoinGecko trending coins, CMC top gainers, top memecoins by market cap, Google Trends rising search terms, and latest news headlines — identify the single most interesting crypto topic attracting real attention RIGHT NOW. Prioritize topics that appear across multiple data sources simultaneously (e.g., a coin trending on CoinGecko AND appearing in Google search spikes AND mentioned in recent headlines). Tell the full story: where the narrative came from, why people are paying attention today, verified facts about the project or event, and what the market data shows. Do not default to Dogecoin, Shiba Inu, Pepe, Bonk, WIF or Floki unless they are genuinely leading across multiple data signals."),
     ("Dogecoin",    "Write the story of Dogecoin (DOGE): from joke to massive market cap. Cover the 2013 origin, Reddit community, Elon Musk influence, and the 2021 explosion. Use real facts and current market data provided."),
     ("Shiba",       "Write a deep dive into Shiba Inu (SHIB): the DOGE killer narrative, ShibArmy, Vitalik Buterin burn event, Shibarium launch. Use real data provided."),
     ("Pepe",        "Write about Pepe (PEPE) coin: how a 4chan frog became a top memecoin in 2023. Cover the cultural roots and current on-chain data provided."),
@@ -736,11 +869,11 @@ MEMECOIN_TOPICS = [
     ("memecoin",    "Write about memecoin culture: why internet memes are the most powerful marketing force in crypto, community as product, and viral mechanics. Use current top memecoin data provided."),
     ("risks",       "Write an honest article about the risks of memecoins: rug pulls, wash trading, low liquidity traps, and how to protect yourself. Use current market data provided as real examples."),
     ("culture",     "Write about the cultural history of memecoins: from Dogecoin's Shibe meme to the explosion of Solana memecoins. Explore how internet culture became a financial force."),
-    ("history",     "Write about a significant moment in memecoin history — chosen based on whatever is most relevant to the trending data provided. Tell the full story with verified facts."),
+    ("history",     "Write about a significant moment in memecoin history — chosen based on whatever is most relevant to the trending data and news headlines provided. Tell the full story with verified facts."),
 ]
 
 MARKET_TOPICS = [
-    ("market",     "Write a market analysis of the current crypto and memecoin sector. Use ALL the real-time market data provided (global market cap, BTC dominance, trending coins, top gainers) to build a comprehensive narrative about what is actually happening in the market right now."),
+    ("market",     "Write a market analysis of the current crypto and memecoin sector. Use ALL the real-time market data provided (global market cap, BTC dominance, trending coins, top gainers, Google Trends signals, and latest news headlines) to build a comprehensive narrative about what is actually happening in the market right now."),
     ("DeFi",       "Write about DeFi on Radix DLT: why Radix's asset-oriented model differs from EVM, and the opportunity for new projects like HYDRA. Reference current DeFi volume data provided."),
     ("psychology", "Write about the psychology of memecoin investing: FOMO, diamond hands, paper hands, and how emotion drives price action. Use current trending coin data provided as real examples."),
     ("bitcoin",    "Write about Bitcoin's current role in the crypto market. Use the global market data and BTC dominance figures provided to anchor the article in what is actually happening now."),
@@ -756,12 +889,15 @@ else:
 image_key, topic = random.choice(pool)
 
 # ---------------------------------------------------------------------------
-# Fetch rich market context
+# Fetch rich market context + external trend signals
 # ---------------------------------------------------------------------------
 print(f"Building market context for topic key: {image_key}")
 print(f"CoinMarketCap API: {'enabled' if cmc_key else 'disabled (no key)'}")
 print(f"CoinGecko API: {'Pro' if cg_key else 'free tier'}")
 market_context = build_market_context(image_key)
+
+print("Fetching external trend signals (Google Trends + RSS)...")
+trend_signals = build_trend_signals()
 
 # ---------------------------------------------------------------------------
 # Category & tags
@@ -829,7 +965,7 @@ HYDRA Chronicles must not become a blog that talks only about HYDRA. The publica
 The central editorial principle is simple: Never invent anything. Every factual claim must be confirmed through a reliable source before being presented as fact.
 
 CORE EDITORIAL MISSION
-Write about what is actually happening in the cryptocurrency and memecoin ecosystem. When real-time market data is provided, use it to determine what is genuinely trending right now — do not default to writing about the same tokens repeatedly. If the trending data shows a coin that is not Dogecoin, Shiba Inu, Pepe, Bonk, WIF, or Floki, write about that coin instead. Choose the subject based on genuine relevance to the data provided.
+Write about what is actually happening in the cryptocurrency and memecoin ecosystem. You are provided with three layers of real-time signals: (1) market data from CoinGecko and CoinMarketCap showing trending coins and top gainers, (2) Google Trends data showing what people are actively searching right now, and (3) the latest news headlines from major crypto publications. Use all three layers together. A topic that appears in all three sources simultaneously is the strongest possible editorial signal — that is what the world wants to read about today. Do not default to writing about the same tokens repeatedly. Choose the subject based on genuine relevance to all the data provided.
 
 When an article focuses on a trending memecoin, tell its story. Explain where the meme or narrative came from when that information can be verified. Explain how the project emerged. Explain why people started paying attention to it. Explain relevant milestones. Explain the community or cultural narrative surrounding it. Explain what can actually be verified about the project. Do not simply write an article consisting of price statistics. The story behind a memecoin is often more interesting than its price.
 
@@ -864,7 +1000,7 @@ TITLE AND SLUG
 The slug must be derived ONLY from the final title: lowercase, hyphens only, no dates, no timestamps, max 80 characters.
 
 SEO
-Optimize every article naturally for search engines without sacrificing readability. Do not keyword stuff. Do not create clickbait titles. The article should satisfy the reader's search intent.
+Optimize every article naturally for search engines without sacrificing readability. Do not keyword stuff. Do not create clickbait titles. The article should satisfy the reader's search intent. Use the Google Trends keywords naturally within the article text where editorially appropriate — this improves organic search relevance without stuffing.
 
 FINAL QUALITY CONTROL
 Before returning, verify: article is in English, at least 1,200 words, no bullet points, no numbered lists, no ### or #### headings, no raw URLs, prices in USD decimal notation, percentages max 2 decimal places, slug from title only, no unsupported claims, no fictional statistics.
@@ -872,18 +1008,26 @@ Before returning, verify: article is in English, at least 1,200 words, no bullet
 OUTPUT FORMAT
 Return ONLY a valid raw JSON object. No markdown fences. No explanations before or after the JSON."""
 
+trend_block = f"\n{trend_signals}" if trend_signals else ""
+
 user_msg = (
     f"Today is {today}. {topic}\n"
     f"{hydra_instruction}"
-    f"{market_context}\n\n"
-    "IMPORTANT EDITORIAL INSTRUCTION: The market data above contains real-time trending coins and top memecoins. "
-    "If the topic asks you to identify what is trending, read the trending and top memecoin data carefully and base your article on whichever coin is genuinely leading the data right now. "
-    "Do not write about Dogecoin, Shiba Inu, Pepe, Bonk, WIF or Floki by default — only choose them if the data confirms they are actually trending at this moment.\n\n"
+    f"{market_context}"
+    f"{trend_block}\n\n"
+    "IMPORTANT EDITORIAL INSTRUCTION: You have been given three layers of real-time signals above:\n"
+    "1. Market data (CoinGecko + CMC): which coins are trending and gaining right now.\n"
+    "2. Google Trends: what people are actively searching for in the crypto space right now.\n"
+    "3. News headlines: what the crypto media is covering right now.\n\n"
+    "Cross-reference all three layers. A topic appearing in all three simultaneously is the strongest editorial signal. "
+    "A topic appearing in two is strong. A topic in only one is weak. "
+    "Choose the most relevant subject based on this combined signal — not random selection.\n\n"
+    "Do not write about Dogecoin, Shiba Inu, Pepe, Bonk, WIF or Floki by default — only choose them if the combined data confirms they are genuinely leading right now.\n\n"
     "Write a compelling article of AT LEAST 1200 words. "
     "Use ## section headers. NO bullet points, NO dashes, NO ### headers. Write in flowing paragraphs only. "
     "ALL links must be [text](url) format, never raw URLs. "
     "Write all crypto prices in standard decimal notation (e.g. $0.00002083), NEVER scientific notation. Round percentages to 2 decimal places. "
-    "Weave prices, volumes, market cap, dominance, and trending coins naturally into the article. "
+    "Weave prices, volumes, market cap, dominance, trending coins, and Google search signals naturally into the article. "
     "Only use facts provided or widely established public knowledge. "
     f"End the content field with this exact disclaimer: {disclaimer}\n\n"
     "Return ONLY this JSON:\n"
