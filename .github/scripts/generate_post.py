@@ -108,18 +108,16 @@ def format_large_number(n):
 
 
 # ---------------------------------------------------------------------------
-# Google Trends via pytrends — trending worldwide + US (general, not just crypto)
+# Google Trends — general trending worldwide + US (not crypto-specific)
 # ---------------------------------------------------------------------------
 
-def fetch_google_trends_crypto() -> list:
+def fetch_google_trends_general() -> list:
     """
-    Install pytrends at runtime (if not present) and return trending search
-    terms from Google — pulling from:
-      1. Worldwide real-time trending searches
-      2. United States real-time trending searches
-      3. Worldwide rising queries for broad crypto keywords
+    Install pytrends at runtime (if not present) and return general trending
+    search terms from Google — pulling from:
+      1. Real-time trending searches (worldwide proxy via pn='US')
+      2. United States daily trending searches
 
-    All three sources are merged and deduplicated.
     Returns a list of up to 20 term strings, empty list on any failure.
     Fallback to random topic selection is handled by pick_topic_from_signals().
     """
@@ -131,13 +129,12 @@ def fetch_google_trends_crypto() -> list:
         )
         from pytrends.request import TrendReq
 
-        pytrends_client = TrendReq(hl="en-US", tz=0, timeout=(10, 30), retries=2, backoff_factor=0.5)
-
         all_terms = []
 
         # --- 1. Worldwide real-time trending searches ---
         try:
-            rt_worldwide = pytrends_client.realtime_trending_searches(pn="US")  # pn="" not supported; WW≈US for realtime
+            pytrends_ww = TrendReq(hl="en-US", tz=0, timeout=(10, 30), retries=2, backoff_factor=0.5)
+            rt_worldwide = pytrends_ww.realtime_trending_searches(pn="US")
             if rt_worldwide is not None and not rt_worldwide.empty:
                 for _, row in rt_worldwide.head(15).iterrows():
                     title = str(row.get("title", "")).strip()
@@ -151,31 +148,14 @@ def fetch_google_trends_crypto() -> list:
 
         # --- 2. United States daily trending searches ---
         try:
-            from pytrends.request import TrendReq as TR2
-            pt_us = TR2(hl="en-US", tz=-300, timeout=(10, 30), retries=2, backoff_factor=0.5)
-            daily_us = pt_us.trending_searches(pn="united_states")
+            pytrends_us = TrendReq(hl="en-US", tz=-300, timeout=(10, 30), retries=2, backoff_factor=0.5)
+            daily_us = pytrends_us.trending_searches(pn="united_states")
             if daily_us is not None and not daily_us.empty:
                 us_terms = daily_us[0].tolist()[:20]
                 all_terms.extend(us_terms)
                 print(f"[pytrends] US daily trending: {len(us_terms)} terms collected")
         except Exception as e:
             print(f"[pytrends] US daily trending failed (non-critical): {e}")
-
-        # --- 3. Worldwide rising queries for broad crypto keywords ---
-        try:
-            kw_list = ["cryptocurrency", "memecoin", "bitcoin", "crypto"]
-            pytrends_client.build_payload(kw_list, cat=0, timeframe="now 1-d", geo="", gprop="")
-            related = pytrends_client.related_queries()
-            for kw in kw_list:
-                df = related.get(kw, {}).get("rising")
-                if df is not None and not df.empty:
-                    for _, row in df.head(5).iterrows():
-                        term = str(row.get("query", "")).strip()
-                        if term and len(term) > 2:
-                            all_terms.append(term)
-            print(f"[pytrends] Worldwide crypto rising queries collected")
-        except Exception as e:
-            print(f"[pytrends] Worldwide rising queries failed (non-critical): {e}")
 
         # --- Deduplicate and normalise ---
         seen = set()
@@ -186,7 +166,7 @@ def fetch_google_trends_crypto() -> list:
                 seen.add(key)
                 result.append(t)
 
-        print(f"[pytrends] Total unique trending terms: {len(result)}")
+        print(f"[pytrends] Total unique general trending terms: {len(result)}")
         return result[:20]
 
     except Exception as e:
@@ -237,15 +217,15 @@ def fetch_rss_headlines() -> list:
 
 def build_trend_signals() -> tuple:
     """
-    Fetch Google Trends rising queries + RSS headlines.
+    Fetch general Google Trends (worldwide + US) + RSS headlines.
     Returns (formatted_block: str, google_terms: list, rss_headlines: list).
     """
-    google_terms = fetch_google_trends_crypto()
+    google_terms = fetch_google_trends_general()
     rss_headlines = fetch_rss_headlines()
 
     lines = []
     if google_terms:
-        lines.append("\n--- GOOGLE TRENDS: Worldwide + US trending searches right now ---")
+        lines.append("\n--- GOOGLE TRENDS: Worldwide + US general trending searches right now ---")
         for t in google_terms:
             lines.append(f"  • {t}")
         lines.append("(These are the top trending terms on Google globally and in the US in the last 24h)")
@@ -313,8 +293,8 @@ def pick_topic_from_signals(pool: list, google_terms: list, rss_headlines: list)
     """
     Score every entry in the pool against live trend signals and return
     the highest-scoring (image_key, topic_prompt) pair.
-    Falls back to random.choice if all scores are zero OR if pytrends returned
-    no terms (no live signals available).
+    Falls back to random.choice if all scores are zero OR if no live signals
+    are available (Google Trends and RSS both returned nothing).
     Ties are broken randomly to ensure variety.
     """
     if not google_terms and not rss_headlines:
@@ -993,7 +973,7 @@ else:
 # ---------------------------------------------------------------------------
 # STEP 1: Fetch live trend signals BEFORE picking the topic
 # ---------------------------------------------------------------------------
-print("Fetching external trend signals (Google Trends worldwide+US + RSS) to guide topic selection...")
+print("Fetching general trend signals (Google Trends worldwide+US + RSS) to guide topic selection...")
 trend_signals_text, google_terms, rss_headlines = build_trend_signals()
 
 # ---------------------------------------------------------------------------
