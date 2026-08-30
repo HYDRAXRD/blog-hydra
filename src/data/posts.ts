@@ -23,7 +23,7 @@ export interface RawPost {
   content: string;
   category?: string;
   author?: string;
-  /** ISO date string, e.g. "2026-08-19". */
+  /** ISO date string, e.g. "2026-08-19" or "2026-08-30T15:09:00Z". */
   date: string;
   readingTime?: number;
   featured?: boolean;
@@ -77,8 +77,31 @@ export const posts: Post[] = Object.values(postModules)
   .filter((raw) => Boolean(raw?.slug && raw?.title))
   .map(toPost);
 
+/**
+ * Sort posts newest-first.
+ * Primary key  : date string (ISO date or ISO datetime — lexicographic DESC).
+ * Secondary key: slug DESC — acts as a stable tiebreaker because the
+ *   generator appends an hour-based suffix (e.g. "-1508") when deduplicating,
+ *   so a later post in the same day will sort correctly after the earlier one.
+ * Tertiary key : title ASC — final stable fallback for truly identical dates.
+ *
+ * Guard: posts with a missing or invalid date are treated as "1970-01-01"
+ * so they sink to the bottom rather than causing NaN comparisons.
+ */
+const safeDateKey = (date: string): string => {
+  if (!date || typeof date !== "string") return "1970-01-01";
+  const d = new Date(date);
+  return Number.isNaN(d.getTime()) ? "1970-01-01" : date;
+};
+
 export const sortedPosts = (): Post[] =>
-  [...posts].sort((a, b) => (a.date < b.date ? 1 : -1));
+  [...posts].sort((a, b) => {
+    const da = safeDateKey(a.date);
+    const db = safeDateKey(b.date);
+    if (da !== db) return da < db ? 1 : -1;          // newest date first
+    if (a.slug !== b.slug) return a.slug < b.slug ? 1 : -1; // later slug first
+    return a.title < b.title ? -1 : 1;               // alphabetical title fallback
+  });
 
 /** Categories actually present in the content, for the filter bar. */
 export const categories: PostCategory[] = Array.from(

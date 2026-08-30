@@ -11,6 +11,10 @@ import time
 
 now = datetime.now(timezone.utc)
 today = now.strftime("%Y-%m-%d")
+# Full ISO-8601 datetime used as the post `date` field so that two posts
+# published on the same calendar day sort correctly (newest commit = latest
+# timestamp = appears first in sortedPosts).
+today_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 hour = now.hour
 api_key = os.environ["OPENROUTER_API_KEY"]
 unsplash_key = os.environ.get("UNSPLASH_API_KEY", "")
@@ -55,13 +59,15 @@ def generate_sitemap(posts_index: list) -> str:
     for post in posts_index:
         slug = post.get("slug", "")
         date = post.get("date", today)
+        # sitemap lastmod requires YYYY-MM-DD; strip time part if present
+        lastmod = date[:10] if date else today
         if not slug:
             continue
         lines += [
             '',
             '  <url>',
             f'    <loc>{BASE_URL}/blog/post/{slug}</loc>',
-            f'    <lastmod>{date}</lastmod>',
+            f'    <lastmod>{lastmod}</lastmod>',
             '    <changefreq>monthly</changefreq>',
             '    <priority>0.8</priority>',
             '  </url>',
@@ -888,7 +894,7 @@ user_msg = (
     '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words, NO bullet points, NO dashes, NO ### headers, ALL links masked, prices always in decimal notation>",\n'
     f'  "category": "{category}",\n'
     '  "author": "HYDRA",\n'
-    f'  "date": "{today}",\n'
+    f'  "date": "{today_iso}",\n'
     '  "readingTime": 6,\n'
     '  "featured": false,\n'
     '  "coverImage": "",\n'
@@ -901,9 +907,6 @@ user_msg = (
 # ---------------------------------------------------------------------------
 
 # Models ordered by reliability — most consistent free models first.
-# meta-llama/llama-3.3-70b and mistral-small added as reliable alternatives.
-# "openrouter/free" is last because it often returns safety filter messages
-# (e.g. "User Safety: safe") instead of actual JSON content, causing parse errors.
 MODELS = [
     "google/gemma-4-31b-it:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
@@ -918,9 +921,6 @@ response_data = None
 content = ""
 attempt = 0
 
-# Retry loop: up to MAX_ATTEMPTS total tries cycling through models.
-# On each attempt we pick the next model in the list (wraps around if needed).
-# A short delay is added between attempts to avoid hitting rate limits.
 while attempt < MAX_ATTEMPTS and not response_data:
     model = MODELS[attempt % len(MODELS)]
     attempt += 1
@@ -961,7 +961,6 @@ while attempt < MAX_ATTEMPTS and not response_data:
             print(f"Attempt {attempt}: model {model} returned empty content, retrying...")
             continue
         content = content.strip()
-        # Reject responses that are clearly not JSON.
         if "{" not in content:
             print(f"Attempt {attempt}: model {model} returned non-JSON, skipping: {content[:120]}")
             continue
@@ -1025,10 +1024,10 @@ if final_slug in existing_slugs:
 post["slug"] = final_slug
 post["id"] = final_slug
 
-# FIX: Guarantee the date field is always set to today, even if the model omitted it.
-if not post.get("date"):
-    post["date"] = today
-    print(f"Date field was missing; set to: {today}")
+# Always overwrite the date with the full ISO-8601 datetime so the blog's
+# sortedPosts() can break ties between same-day articles correctly.
+post["date"] = today_iso
+print(f"Date set to ISO datetime: {today_iso}")
 
 word_count = len(post.get("content", "").split())
 post["readingTime"] = max(1, round(word_count / 200))
