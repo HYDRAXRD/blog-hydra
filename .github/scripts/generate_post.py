@@ -212,31 +212,110 @@ def fetch_rss_headlines() -> list:
 # Combine all trend signals into a single context block for the prompt
 # ---------------------------------------------------------------------------
 
-def build_trend_signals() -> str:
+def build_trend_signals() -> tuple:
     """
-    Fetch Google Trends rising queries + RSS headlines and return a formatted
-    block to be injected into the LLM prompt.
+    Fetch Google Trends rising queries + RSS headlines.
+    Returns (formatted_block: str, google_terms: list, rss_headlines: list).
     """
-    lines = []
-
     google_terms = fetch_google_trends_crypto()
+    rss_headlines = fetch_rss_headlines()
+
+    lines = []
     if google_terms:
         lines.append("\n--- GOOGLE TRENDS: Rising crypto search terms right now ---")
         for t in google_terms:
             lines.append(f"  • {t}")
         lines.append("(These are terms people are actively searching on Google in the last 24h)")
 
-    rss_headlines = fetch_rss_headlines()
     if rss_headlines:
         lines.append("\n--- LATEST NEWS HEADLINES (CoinTelegraph / CryptoSlate / Decrypt) ---")
         for h in rss_headlines:
             lines.append(f"  • {h}")
         lines.append("(These headlines reflect what the crypto world is talking about right now)")
 
-    if not lines:
-        return ""
+    formatted = "\n".join(lines) if lines else ""
+    return formatted, google_terms, rss_headlines
 
-    return "\n".join(lines)
+
+# ---------------------------------------------------------------------------
+# Topic selection driven by live trend signals
+# ---------------------------------------------------------------------------
+
+# Keyword map: each topic pool entry is associated with keywords that, if
+# found in Google Trends terms or RSS headlines, increase its score.
+TOPIC_KEYWORDS = {
+    "HYDRA":        ["hydra", "hydraswap", "radix", "xrd"],
+    "HydraSwap":    ["hydraswap", "hydra", "dex", "radix"],
+    "Dogecoin":     ["dogecoin", "doge"],
+    "Shiba":        ["shiba", "shib"],
+    "Pepe":         ["pepe", "frog"],
+    "WIF":          ["wif", "dogwifhat", "dog wif hat"],
+    "BONK":         ["bonk"],
+    "FLOKI":        ["floki"],
+    "market":       ["bitcoin", "btc", "market cap", "crypto market", "bull", "bear"],
+    "guide":        ["how to buy", "guide", "tutorial", "beginners", "invest"],
+    "risks":        ["rug pull", "scam", "hack", "risk", "warning", "crash"],
+    "psychology":   ["fomo", "fear", "greed", "psychology", "emotion", "panic"],
+    "millionaires": ["millionaire", "rich", "gains", "10000x", "100x", "early holder"],
+    "memecoin":     ["memecoin", "meme coin", "meme token", "viral coin"],
+    "DeFi":         ["defi", "decentralized finance", "liquidity", "yield", "amm"],
+    "trending":     ["trending", "top gainer", "viral", "pumping", "hot coin"],
+    "bitcoin":      ["bitcoin", "btc", "halving", "satoshi", "sats"],
+    "culture":      ["meme", "culture", "internet", "community", "viral"],
+    "history":      ["history", "2021", "bull run", "crash", "2017", "all time high"],
+    "Radix":        ["radix", "xrd", "cerberus", "babylon"],
+    "psychology":   ["psychology", "fomo", "greed", "fear", "emotional"],
+}
+
+
+def score_topic(image_key: str, google_terms: list, rss_headlines: list) -> int:
+    """
+    Score a topic based on how many of its keywords appear in the live signals.
+    Google Trends match = 2 points (people are actively searching).
+    RSS headline match  = 1 point  (media is covering it).
+    """
+    keywords = TOPIC_KEYWORDS.get(image_key, [image_key.lower()])
+    score = 0
+    all_trends_text = " ".join(google_terms).lower()
+    all_rss_text = " ".join(rss_headlines).lower()
+    for kw in keywords:
+        kw_lower = kw.lower()
+        if kw_lower in all_trends_text:
+            score += 2
+        if kw_lower in all_rss_text:
+            score += 1
+    return score
+
+
+def pick_topic_from_signals(pool: list, google_terms: list, rss_headlines: list) -> tuple:
+    """
+    Score every entry in the pool against live trend signals and return
+    the highest-scoring (image_key, topic_prompt) pair.
+    Falls back to random.choice if all scores are zero (no signals).
+    Ties are broken randomly to ensure variety.
+    """
+    if not google_terms and not rss_headlines:
+        print("No live signals available — falling back to random topic selection.")
+        return random.choice(pool)
+
+    scored = []
+    for entry in pool:
+        img_key = entry[0]
+        s = score_topic(img_key, google_terms, rss_headlines)
+        scored.append((s, entry))
+        print(f"  Topic score [{img_key}]: {s}")
+
+    max_score = max(s for s, _ in scored)
+
+    if max_score == 0:
+        print("All topic scores are 0 — falling back to random topic selection.")
+        return random.choice(pool)
+
+    # Collect all entries tied at the top score and pick randomly among them
+    top_entries = [entry for s, entry in scored if s == max_score]
+    chosen = random.choice(top_entries)
+    print(f"Trend-driven topic selected: [{chosen[0]}] (score={max_score}, {len(top_entries)} tied at top)")
+    return chosen
 
 
 # ---------------------------------------------------------------------------
@@ -800,9 +879,9 @@ def fetch_unsplash_image(query: str, width: int = 1200, height: int = 630) -> st
                 data = json.loads(resp.read())
             results = data.get("results", [])
             fresh = [r for r in results if r["id"] not in used_ids]
-            pool = fresh[:10] if fresh else results[:10]
-            if pool:
-                photo = random.choice(pool)
+            pool_imgs = fresh[:10] if fresh else results[:10]
+            if pool_imgs:
+                photo = random.choice(pool_imgs)
                 raw_url = photo["urls"]["raw"]
                 image_url = f"{raw_url}&w={width}&h={height}&fit=crop&auto=format&q=80"
                 print(f"Unsplash fallback query image: {photo.get('id')} by {photo.get('user', {}).get('name', 'unknown')}")
@@ -886,18 +965,25 @@ elif hour < 20:
 else:
     pool = MARKET_TOPICS + MEMECOIN_TOPICS
 
-image_key, topic = random.choice(pool)
+# ---------------------------------------------------------------------------
+# STEP 1: Fetch live trend signals BEFORE picking the topic
+# ---------------------------------------------------------------------------
+print("Fetching external trend signals (Google Trends + RSS) to guide topic selection...")
+trend_signals_text, google_terms, rss_headlines = build_trend_signals()
 
 # ---------------------------------------------------------------------------
-# Fetch rich market context + external trend signals
+# STEP 2: Pick topic driven by live signals
+# ---------------------------------------------------------------------------
+print("Scoring topic pool against live signals...")
+image_key, topic = pick_topic_from_signals(pool, google_terms, rss_headlines)
+
+# ---------------------------------------------------------------------------
+# Fetch rich market context after topic is known
 # ---------------------------------------------------------------------------
 print(f"Building market context for topic key: {image_key}")
 print(f"CoinMarketCap API: {'enabled' if cmc_key else 'disabled (no key)'}")
 print(f"CoinGecko API: {'Pro' if cg_key else 'free tier'}")
 market_context = build_market_context(image_key)
-
-print("Fetching external trend signals (Google Trends + RSS)...")
-trend_signals = build_trend_signals()
 
 # ---------------------------------------------------------------------------
 # Category & tags
@@ -1008,7 +1094,7 @@ Before returning, verify: article is in English, at least 1,200 words, no bullet
 OUTPUT FORMAT
 Return ONLY a valid raw JSON object. No markdown fences. No explanations before or after the JSON."""
 
-trend_block = f"\n{trend_signals}" if trend_signals else ""
+trend_block = f"\n{trend_signals_text}" if trend_signals_text else ""
 
 user_msg = (
     f"Today is {today}. {topic}\n"
