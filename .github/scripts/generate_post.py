@@ -108,14 +108,20 @@ def format_large_number(n):
 
 
 # ---------------------------------------------------------------------------
-# Google Trends via pytrends — what people are actually searching right now
+# Google Trends via pytrends — trending worldwide + US (general, not just crypto)
 # ---------------------------------------------------------------------------
 
 def fetch_google_trends_crypto() -> list:
     """
-    Install pytrends at runtime (if not present) and return the top crypto
-    search keywords trending on Google in the last 24 hours.
-    Returns a list of keyword strings, empty list on any failure.
+    Install pytrends at runtime (if not present) and return trending search
+    terms from Google — pulling from:
+      1. Worldwide real-time trending searches
+      2. United States real-time trending searches
+      3. Worldwide rising queries for broad crypto keywords
+
+    All three sources are merged and deduplicated.
+    Returns a list of up to 20 term strings, empty list on any failure.
+    Fallback to random topic selection is handled by pick_topic_from_signals().
     """
     try:
         import subprocess
@@ -125,49 +131,66 @@ def fetch_google_trends_crypto() -> list:
         )
         from pytrends.request import TrendReq
 
-        pytrends = TrendReq(hl="en-US", tz=0, timeout=(10, 30), retries=2, backoff_factor=0.5)
+        pytrends_client = TrendReq(hl="en-US", tz=0, timeout=(10, 30), retries=2, backoff_factor=0.5)
 
-        # Search for crypto-related keywords to get related rising queries
-        kw_list = ["cryptocurrency", "memecoin", "bitcoin", "crypto"]
-        pytrends.build_payload(kw_list, cat=0, timeframe="now 1-d", geo="", gprop="")
-        related = pytrends.related_queries()
+        all_terms = []
 
-        rising_terms = []
-        for kw in kw_list:
-            df = related.get(kw, {}).get("rising")
-            if df is not None and not df.empty:
-                for _, row in df.head(5).iterrows():
-                    term = str(row.get("query", "")).strip()
-                    if term and len(term) > 2:
-                        rising_terms.append(term)
-
-        # Also grab real-time trending searches (US)
+        # --- 1. Worldwide real-time trending searches ---
         try:
-            trending_rt = pytrends.realtime_trending_searches(pn="US")
-            if trending_rt is not None and not trending_rt.empty:
-                for _, row in trending_rt.head(10).iterrows():
+            rt_worldwide = pytrends_client.realtime_trending_searches(pn="US")  # pn="" not supported; WW≈US for realtime
+            if rt_worldwide is not None and not rt_worldwide.empty:
+                for _, row in rt_worldwide.head(15).iterrows():
                     title = str(row.get("title", "")).strip()
                     entity_names = str(row.get("entityNames", "")).strip()
                     for term in [title, entity_names]:
-                        if any(kw in term.lower() for kw in ["crypto", "bitcoin", "coin", "token", "defi", "nft", "blockchain", "eth", "btc", "solana"]):
-                            rising_terms.append(term)
+                        if term and len(term) > 2:
+                            all_terms.append(term)
+                print(f"[pytrends] Worldwide realtime trending: {len(all_terms)} terms collected")
         except Exception as e:
-            print(f"Realtime trending search failed (non-critical): {e}")
+            print(f"[pytrends] Worldwide realtime failed (non-critical): {e}")
 
-        # Deduplicate, normalise
+        # --- 2. United States daily trending searches ---
+        try:
+            from pytrends.request import TrendReq as TR2
+            pt_us = TR2(hl="en-US", tz=-300, timeout=(10, 30), retries=2, backoff_factor=0.5)
+            daily_us = pt_us.trending_searches(pn="united_states")
+            if daily_us is not None and not daily_us.empty:
+                us_terms = daily_us[0].tolist()[:20]
+                all_terms.extend(us_terms)
+                print(f"[pytrends] US daily trending: {len(us_terms)} terms collected")
+        except Exception as e:
+            print(f"[pytrends] US daily trending failed (non-critical): {e}")
+
+        # --- 3. Worldwide rising queries for broad crypto keywords ---
+        try:
+            kw_list = ["cryptocurrency", "memecoin", "bitcoin", "crypto"]
+            pytrends_client.build_payload(kw_list, cat=0, timeframe="now 1-d", geo="", gprop="")
+            related = pytrends_client.related_queries()
+            for kw in kw_list:
+                df = related.get(kw, {}).get("rising")
+                if df is not None and not df.empty:
+                    for _, row in df.head(5).iterrows():
+                        term = str(row.get("query", "")).strip()
+                        if term and len(term) > 2:
+                            all_terms.append(term)
+            print(f"[pytrends] Worldwide crypto rising queries collected")
+        except Exception as e:
+            print(f"[pytrends] Worldwide rising queries failed (non-critical): {e}")
+
+        # --- Deduplicate and normalise ---
         seen = set()
         result = []
-        for t in rising_terms:
-            key = t.lower()
-            if key not in seen:
+        for t in all_terms:
+            key = t.lower().strip()
+            if key and key not in seen:
                 seen.add(key)
                 result.append(t)
 
-        print(f"Google Trends: {len(result)} rising crypto terms found")
-        return result[:15]
+        print(f"[pytrends] Total unique trending terms: {len(result)}")
+        return result[:20]
 
     except Exception as e:
-        print(f"Google Trends fetch failed (non-critical): {e}")
+        print(f"[pytrends] Full fetch failed (non-critical) — random fallback will be used: {e}")
         return []
 
 
@@ -222,10 +245,10 @@ def build_trend_signals() -> tuple:
 
     lines = []
     if google_terms:
-        lines.append("\n--- GOOGLE TRENDS: Rising crypto search terms right now ---")
+        lines.append("\n--- GOOGLE TRENDS: Worldwide + US trending searches right now ---")
         for t in google_terms:
             lines.append(f"  • {t}")
-        lines.append("(These are terms people are actively searching on Google in the last 24h)")
+        lines.append("(These are the top trending terms on Google globally and in the US in the last 24h)")
 
     if rss_headlines:
         lines.append("\n--- LATEST NEWS HEADLINES (CoinTelegraph / CryptoSlate / Decrypt) ---")
@@ -264,7 +287,6 @@ TOPIC_KEYWORDS = {
     "culture":      ["meme", "culture", "internet", "community", "viral"],
     "history":      ["history", "2021", "bull run", "crash", "2017", "all time high"],
     "Radix":        ["radix", "xrd", "cerberus", "babylon"],
-    "psychology":   ["psychology", "fomo", "greed", "fear", "emotional"],
 }
 
 
@@ -291,12 +313,14 @@ def pick_topic_from_signals(pool: list, google_terms: list, rss_headlines: list)
     """
     Score every entry in the pool against live trend signals and return
     the highest-scoring (image_key, topic_prompt) pair.
-    Falls back to random.choice if all scores are zero (no signals).
+    Falls back to random.choice if all scores are zero OR if pytrends returned
+    no terms (no live signals available).
     Ties are broken randomly to ensure variety.
     """
     if not google_terms and not rss_headlines:
-        print("No live signals available — falling back to random topic selection.")
-        return random.choice(pool)
+        chosen = random.choice(pool)
+        print(f"[fallback] No live signals — random topic selected: [{chosen[0]}]")
+        return chosen
 
     scored = []
     for entry in pool:
@@ -308,8 +332,9 @@ def pick_topic_from_signals(pool: list, google_terms: list, rss_headlines: list)
     max_score = max(s for s, _ in scored)
 
     if max_score == 0:
-        print("All topic scores are 0 — falling back to random topic selection.")
-        return random.choice(pool)
+        chosen = random.choice(pool)
+        print(f"[fallback] All scores are 0 — random topic selected: [{chosen[0]}]")
+        return chosen
 
     # Collect all entries tied at the top score and pick randomly among them
     top_entries = [entry for s, entry in scored if s == max_score]
@@ -968,11 +993,11 @@ else:
 # ---------------------------------------------------------------------------
 # STEP 1: Fetch live trend signals BEFORE picking the topic
 # ---------------------------------------------------------------------------
-print("Fetching external trend signals (Google Trends + RSS) to guide topic selection...")
+print("Fetching external trend signals (Google Trends worldwide+US + RSS) to guide topic selection...")
 trend_signals_text, google_terms, rss_headlines = build_trend_signals()
 
 # ---------------------------------------------------------------------------
-# STEP 2: Pick topic driven by live signals
+# STEP 2: Pick topic driven by live signals (random fallback if no signals)
 # ---------------------------------------------------------------------------
 print("Scoring topic pool against live signals...")
 image_key, topic = pick_topic_from_signals(pool, google_terms, rss_headlines)
@@ -1051,7 +1076,7 @@ HYDRA Chronicles must not become a blog that talks only about HYDRA. The publica
 The central editorial principle is simple: Never invent anything. Every factual claim must be confirmed through a reliable source before being presented as fact.
 
 CORE EDITORIAL MISSION
-Write about what is actually happening in the cryptocurrency and memecoin ecosystem. You are provided with three layers of real-time signals: (1) market data from CoinGecko and CoinMarketCap showing trending coins and top gainers, (2) Google Trends data showing what people are actively searching right now, and (3) the latest news headlines from major crypto publications. Use all three layers together. A topic that appears in all three sources simultaneously is the strongest possible editorial signal — that is what the world wants to read about today. Do not default to writing about the same tokens repeatedly. Choose the subject based on genuine relevance to all the data provided.
+Write about what is actually happening in the cryptocurrency and memecoin ecosystem. You are provided with three layers of real-time signals: (1) market data from CoinGecko and CoinMarketCap showing trending coins and top gainers, (2) Google Trends data showing what people are actively searching right now worldwide and in the US, and (3) the latest news headlines from major crypto publications. Use all three layers together. A topic that appears in all three sources simultaneously is the strongest possible editorial signal — that is what the world wants to read about today. Do not default to writing about the same tokens repeatedly. Choose the subject based on genuine relevance to all the data provided.
 
 When an article focuses on a trending memecoin, tell its story. Explain where the meme or narrative came from when that information can be verified. Explain how the project emerged. Explain why people started paying attention to it. Explain relevant milestones. Explain the community or cultural narrative surrounding it. Explain what can actually be verified about the project. Do not simply write an article consisting of price statistics. The story behind a memecoin is often more interesting than its price.
 
@@ -1103,7 +1128,7 @@ user_msg = (
     f"{trend_block}\n\n"
     "IMPORTANT EDITORIAL INSTRUCTION: You have been given three layers of real-time signals above:\n"
     "1. Market data (CoinGecko + CMC): which coins are trending and gaining right now.\n"
-    "2. Google Trends: what people are actively searching for in the crypto space right now.\n"
+    "2. Google Trends: what people are actively searching for worldwide and in the US right now.\n"
     "3. News headlines: what the crypto media is covering right now.\n\n"
     "Cross-reference all three layers. A topic appearing in all three simultaneously is the strongest editorial signal. "
     "A topic appearing in two is strong. A topic in only one is weak. "
