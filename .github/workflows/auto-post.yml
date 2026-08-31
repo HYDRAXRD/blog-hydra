@@ -39,7 +39,7 @@ jobs:
           pip install --quiet --upgrade pip
           pip install --quiet pytrends requests
           echo "=== Verifying imports ==="
-          python3 -c "import pytrends, requests; print('OK pytrends=' + pytrends.__version__)"
+          python3 -c "import pytrends, requests; print('OK: pytrends and requests imported')"
 
       - name: Syntax check script
         run: |
@@ -83,13 +83,13 @@ jobs:
 
           # Hard-fail on empty outputs
           if [ -z "$SLUG" ]; then
-            echo "ERROR: SLUG is empty — script did not print a SLUG: line"
+            echo "ERROR: SLUG is empty - script did not print a SLUG: line"
             tail -30 /tmp/gen.txt
             exit 1
           fi
 
           if [ -z "$POST_FILE" ]; then
-            echo "ERROR: POST_FILE is empty — script did not print a SUCCESS: line"
+            echo "ERROR: POST_FILE is empty - script did not print a SUCCESS: line"
             tail -30 /tmp/gen.txt
             exit 1
           fi
@@ -131,7 +131,7 @@ jobs:
           set -e
 
           if [ -z "$SLUG" ] || [ -z "$POST_FILE" ]; then
-            echo "ERROR: SLUG or POST_FILE is empty — aborting"
+            echo "ERROR: SLUG or POST_FILE is empty - aborting"
             exit 1
           fi
 
@@ -157,4 +157,4 @@ jobs:
 
           git commit -m "Auto post: $SLUG"
           git push origin main
-          echo "SUCCESS: pushed — Cloudflare deploy triggered"
+          echo "SUCCESS: pushed - Cloudflare deploy triggered"
