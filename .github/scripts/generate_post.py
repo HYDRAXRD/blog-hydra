@@ -108,6 +108,113 @@ def format_large_number(n):
 
 
 # ---------------------------------------------------------------------------
+# DUPLICATE DETECTION — load existing posts to prevent title/content reuse
+# ---------------------------------------------------------------------------
+
+def _normalize_text(text: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace for fuzzy comparison."""
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _title_similarity(a: str, b: str) -> float:
+    """
+    Jaccard similarity on word sets between two titles.
+    Returns a float between 0.0 (no overlap) and 1.0 (identical).
+    """
+    words_a = set(_normalize_text(a).split())
+    words_b = set(_normalize_text(b).split())
+    if not words_a or not words_b:
+        return 0.0
+    intersection = words_a & words_b
+    union = words_a | words_b
+    return len(intersection) / len(union)
+
+
+def load_existing_posts_context() -> dict:
+    """
+    Load all existing post titles, slugs, excerpts, and first 400 chars of
+    content from posts-index.json. Returns a dict with:
+      - titles: list[str]
+      - slugs: set[str]
+      - excerpts: list[str]
+      - content_previews: list[str]  (first 400 chars of each article)
+    """
+    index_path = "public/posts-index.json"
+    context = {"titles": [], "slugs": set(), "excerpts": [], "content_previews": []}
+    if not os.path.exists(index_path):
+        return context
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            posts = json.load(f)
+        for p in posts:
+            title = p.get("title", "")
+            slug = p.get("slug", "")
+            excerpt = p.get("excerpt", "")
+            content = p.get("content", "")[:400]
+            if title:
+                context["titles"].append(title)
+            if slug:
+                context["slugs"].add(slug)
+            if excerpt:
+                context["excerpts"].append(excerpt)
+            if content:
+                context["content_previews"].append(content)
+    except Exception as e:
+        print(f"Warning: could not load existing posts context: {e}")
+    print(f"[dedup] Loaded {len(context['titles'])} existing post titles for duplicate check.")
+    return context
+
+
+def check_title_duplicate(new_title: str, existing_titles: list, threshold: float = 0.65) -> tuple:
+    """
+    Check if new_title is too similar to any existing title.
+    Returns (is_duplicate: bool, most_similar_title: str, similarity_score: float).
+    """
+    best_score = 0.0
+    best_match = ""
+    for existing in existing_titles:
+        score = _title_similarity(new_title, existing)
+        if score > best_score:
+            best_score = score
+            best_match = existing
+    is_dup = best_score >= threshold
+    if is_dup:
+        print(f"[dedup] TITLE TOO SIMILAR ({best_score:.2f}): '{new_title}' ≈ '{best_match}'")
+    else:
+        print(f"[dedup] Title OK (max similarity {best_score:.2f}): '{new_title}'")
+    return is_dup, best_match, best_score
+
+
+def build_existing_posts_summary(context: dict) -> str:
+    """
+    Build a concise text block listing all existing post titles and excerpts
+    to inject into the LLM prompt so the model can actively avoid repetition.
+    """
+    if not context["titles"]:
+        return ""
+    lines = [
+        "\n\n--- EXISTING PUBLISHED ARTICLES (DO NOT REPEAT THESE) ---",
+        "The following articles have already been published. You MUST NOT:",
+        "  1. Use the same or very similar title.",
+        "  2. Cover the same angle, argument, or narrative.",
+        "  3. Repeat the same opening paragraph or section structure.",
+        "  4. Reuse the same hook, thesis, or conclusion.",
+        "Write something genuinely different in angle, framing, and structure.\n",
+    ]
+    for i, title in enumerate(context["titles"][:40]):  # cap at 40 to stay within token limits
+        excerpt = context["excerpts"][i] if i < len(context["excerpts"]) else ""
+        if excerpt:
+            lines.append(f"  • \"{title}\" — {excerpt[:120]}")
+        else:
+            lines.append(f"  • \"{title}\"")
+    lines.append("--- END OF EXISTING ARTICLES LIST ---\n")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Google Trends — general trending worldwide + US (not crypto-specific)
 # ---------------------------------------------------------------------------
 
@@ -993,6 +1100,13 @@ else:
     pool = MARKET_TOPICS + MEMECOIN_TOPICS
 
 # ---------------------------------------------------------------------------
+# STEP 0: Load existing posts context for duplicate prevention
+# ---------------------------------------------------------------------------
+print("Loading existing posts context for duplicate detection...")
+existing_posts_context = load_existing_posts_context()
+existing_posts_summary = build_existing_posts_summary(existing_posts_context)
+
+# ---------------------------------------------------------------------------
 # STEP 1: Fetch live trend signals BEFORE picking the topic
 # ---------------------------------------------------------------------------
 print("Fetching general trend signals (Google Trends worldwide+US + RSS) to guide topic selection...")
@@ -1147,8 +1261,16 @@ The slug must be derived ONLY from the final title: lowercase, hyphens only, no 
 SEO
 Optimize every article naturally for search engines without sacrificing readability. Do not keyword stuff. Do not create clickbait titles. The article should satisfy the reader's search intent. Use the Google Trends keywords naturally within the article text where editorially appropriate — this improves organic search relevance without stuffing.
 
+ORIGINALITY — CRITICAL
+You will be given a list of articles already published. You MUST produce an article that is completely original in:
+  - Title: do not reuse or closely paraphrase any existing title.
+  - Angle: do not repeat the same narrative, argument, or framing as any existing article.
+  - Opening: write a genuinely different hook and introduction.
+  - Structure: vary section headings and narrative flow from existing articles on the same topic.
+If the assigned topic has already been covered from multiple angles, find a new dimension: a different timeframe, a different audience, a different question to answer, or a different aspect of the story.
+
 FINAL QUALITY CONTROL
-Before returning, verify: article is in English, at least 1,200 words, no bullet points, no numbered lists, no ### or #### headings, no raw URLs, prices in USD decimal notation, percentages max 2 decimal places, slug from title only, no unsupported claims, no fictional statistics.
+Before returning, verify: article is in English, at least 1,200 words, no bullet points, no numbered lists, no ### or #### headings, no raw URLs, prices in USD decimal notation, percentages max 2 decimal places, slug from title only, no unsupported claims, no fictional statistics, title is not a duplicate or near-duplicate of any existing article listed above.
 
 OUTPUT FORMAT
 Return ONLY a valid raw JSON object. No markdown fences. No explanations before or after the JSON."""
@@ -1169,6 +1291,7 @@ user_msg = (
     "A topic appearing in two is strong. A topic in only one is weak. "
     "Choose the most relevant subject based on this combined signal — not random selection.\n\n"
     "Do not write about Dogecoin, Shiba Inu, Pepe, Bonk, WIF or Floki by default — only choose them if the combined data confirms they are genuinely leading right now.\n\n"
+    f"{existing_posts_summary}"
     "Write a compelling article of AT LEAST 1200 words. "
     "Use ## section headers. NO bullet points, NO dashes, NO ### headers. Write in flowing paragraphs only. "
     "ALL links must be [text](url) format, never raw URLs. "
@@ -1178,7 +1301,7 @@ user_msg = (
     f"End the content field with this exact disclaimer: {disclaimer}\n\n"
     "Return ONLY this JSON:\n"
     "{\n"
-    '  "title": "<catchy engaging title that accurately reflects the article subject>",\n'
+    '  "title": "<catchy engaging title that accurately reflects the article subject — MUST be completely different from all existing titles listed above>",\n'
     '  "slug": "<URL slug derived from the title: lowercase, hyphens only, NO dates, NO timestamps, max 80 chars>",\n'
     '  "excerpt": "<compelling summary under 200 chars, prices in decimal notation only>",\n'
     '  "content": "<full article in markdown, use \\n for newlines, minimum 1200 words, NO bullet points, NO dashes, NO ### headers, ALL links masked, prices always in decimal notation>",\n'
@@ -1292,6 +1415,25 @@ try:
 except json.JSONDecodeError as e:
     print(f"JSON parse error: {e}")
     print(f"Raw content: {content[:500]}")
+    sys.exit(1)
+
+# ---------------------------------------------------------------------------
+# Duplicate title check — abort if too similar to existing title
+# ---------------------------------------------------------------------------
+
+new_title = post.get("title", "")
+is_dup_title, similar_title, sim_score = check_title_duplicate(
+    new_title, existing_posts_context["titles"], threshold=0.65
+)
+if is_dup_title:
+    print(
+        f"ABORT: Generated title is too similar to an existing article.\n"
+        f"  New:      '{new_title}'\n"
+        f"  Existing: '{similar_title}'\n"
+        f"  Score:    {sim_score:.2f} (threshold 0.65)\n"
+        f"The LLM was instructed to avoid duplicates but produced one anyway. "
+        f"The workflow will exit without saving. Re-run to generate a fresh article."
+    )
     sys.exit(1)
 
 # ---------------------------------------------------------------------------
