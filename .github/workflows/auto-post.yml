@@ -31,7 +31,15 @@ jobs:
           fetch-depth: 0
 
       - name: Install dependencies
-        run: pip install pytrends requests
+        run: |
+          set -e
+          echo "=== Python version ==="
+          python3 --version
+          echo "=== Installing dependencies ==="
+          pip install --quiet --upgrade pip
+          pip install --quiet pytrends requests
+          echo "=== Verifying imports ==="
+          python3 -c "import pytrends; import requests; print('OK: pytrends', pytrends.__version__)"
 
       - name: Generate post
         id: generate
@@ -46,22 +54,33 @@ jobs:
           find .github/scripts -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
           echo "Bytecode cache purged."
 
-          # --- Run script writing output to file; capture exit code BEFORE tee ---
-          # NOTE: pipefail is intentionally NOT used here.
-          # With pipefail + tee, $? captures tee's exit (always 0), masking Python failures.
-          # Instead we redirect stdout+stderr to a file, then tee for live display.
+          # --- Syntax-check the script before running it ---
+          echo "=== Syntax check ==="
+          python3 -m py_compile .github/scripts/generate_post.py && echo "Syntax OK" || {
+            echo "ERROR: generate_post.py has a syntax error"
+            python3 -c "
+import ast, sys
+try:
+    ast.parse(open('.github/scripts/generate_post.py').read())
+except SyntaxError as e:
+    print(f'SyntaxError at line {e.lineno}: {e.msg}')
+    print(f'  >> {e.text}')
+    sys.exit(1)
+"
+            exit 1
+          }
+
+          # --- Run script; capture exit code cleanly (no pipefail+tee trap) ---
           python3 -B .github/scripts/generate_post.py > /tmp/gen.txt 2>&1
           PYTHON_EXIT=$?
 
-          # Display output for the GitHub Actions log
+          # Display full output in Actions log
           cat /tmp/gen.txt
 
           echo "--- Python exit code: $PYTHON_EXIT ---"
 
           if [ "$PYTHON_EXIT" != "0" ]; then
             echo "ERROR: generate_post.py exited with code $PYTHON_EXIT"
-            echo "Full script output:"
-            cat /tmp/gen.txt
             exit 1
           fi
 
@@ -72,19 +91,19 @@ jobs:
           echo "Captured SLUG='$SLUG'"
           echo "Captured POST_FILE='$POST_FILE'"
 
-          # --- Validate SLUG ---
+          # --- Hard-fail if SLUG is empty ---
           if [ -z "$SLUG" ]; then
             echo "ERROR: SLUG is empty — script did not print a 'SLUG:' line"
-            echo "Full script output:"
-            cat /tmp/gen.txt
+            echo "Last 30 lines of script output:"
+            tail -30 /tmp/gen.txt
             exit 1
           fi
 
-          # --- Validate POST_FILE ---
+          # --- Hard-fail if POST_FILE is empty ---
           if [ -z "$POST_FILE" ]; then
             echo "ERROR: POST_FILE is empty — script did not print a 'SUCCESS:' line"
-            echo "Full script output:"
-            cat /tmp/gen.txt
+            echo "Last 30 lines of script output:"
+            tail -30 /tmp/gen.txt
             exit 1
           fi
 
