@@ -38,21 +38,69 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
+          API_KEY_CMC: ${{ secrets.API_KEY_CMC }}
+          API_KEY_COINGECKO: ${{ secrets.API_KEY_COINGECKO }}
         run: |
           set -e
-          python3 .github/scripts/generate_post.py | tee /tmp/gen.txt
-          SLUG=$(grep 'SLUG:' /tmp/gen.txt | cut -d: -f2 | tr -d ' ')
-          POST_FILE=$(grep 'SUCCESS:' /tmp/gen.txt | cut -d: -f2 | tr -d ' ')
-          echo "slug=$SLUG" >> $GITHUB_OUTPUT
-          echo "post_file=$POST_FILE" >> $GITHUB_OUTPUT
-          echo "Generated: $POST_FILE (slug: $SLUG)"
 
-          # Backup imediato dos 3 arquivos gerados no mesmo step
+          # Run script and capture full output
+          python3 .github/scripts/generate_post.py 2>&1 | tee /tmp/gen.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          echo "--- Script output tail ---"
+          tail -20 /tmp/gen.txt
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "ERROR: generate_post.py exited with code $EXIT_CODE"
+            exit 1
+          fi
+
+          # Extract SLUG and POST_FILE from script output
+          SLUG=$(grep '^SLUG:' /tmp/gen.txt | tail -1 | cut -d: -f2 | tr -d ' \r\n')
+          POST_FILE=$(grep '^SUCCESS:' /tmp/gen.txt | tail -1 | cut -d: -f2- | tr -d ' \r\n')
+
+          echo "Captured SLUG='$SLUG'"
+          echo "Captured POST_FILE='$POST_FILE'"
+
+          # Validate both values are non-empty
+          if [ -z "$SLUG" ]; then
+            echo "ERROR: SLUG is empty — script did not print SLUG: line"
+            exit 1
+          fi
+          if [ -z "$POST_FILE" ]; then
+            echo "ERROR: POST_FILE is empty — script did not print SUCCESS: line"
+            exit 1
+          fi
+
+          # Validate the post file actually exists on disk
+          if [ ! -f "$POST_FILE" ]; then
+            echo "ERROR: post file '$POST_FILE' does not exist on disk"
+            exit 1
+          fi
+
+          # Validate posts-index.json exists
+          if [ ! -f "public/posts-index.json" ]; then
+            echo "ERROR: public/posts-index.json not found"
+            exit 1
+          fi
+
+          # Validate sitemap.xml exists
+          if [ ! -f "public/sitemap.xml" ]; then
+            echo "ERROR: public/sitemap.xml not found"
+            exit 1
+          fi
+
+          # All good — backup the 3 generated files before any git operation
           mkdir -p /tmp/hydra-backup
           cp "$POST_FILE" /tmp/hydra-backup/new-post.json
           cp public/posts-index.json /tmp/hydra-backup/posts-index.json
           cp public/sitemap.xml /tmp/hydra-backup/sitemap.xml
-          echo "Backup OK"
+          echo "Backup OK: $POST_FILE + posts-index.json + sitemap.xml"
+
+          # Export outputs
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+          echo "post_file=$POST_FILE" >> "$GITHUB_OUTPUT"
+          echo "Generated: $POST_FILE (slug: $SLUG)"
 
       - name: Commit and push post
         env:
@@ -61,14 +109,20 @@ jobs:
         run: |
           set -e
 
+          # Safety check: outputs must not be empty
+          if [ -z "$SLUG" ] || [ -z "$POST_FILE" ]; then
+            echo "ERROR: SLUG or POST_FILE output is empty — aborting commit step"
+            exit 1
+          fi
+
           git config user.name "HYDRA AI Bot"
           git config user.email "bot@hydraxrd.com"
 
-          # Sincroniza com remoto sem perder os arquivos gerados
+          # Sync with remote without losing generated files (they are in /tmp/hydra-backup)
           git fetch origin main
           git reset --hard origin/main
 
-          # Restaura os 3 arquivos gerados
+          # Restore the 3 generated files after hard reset
           mkdir -p src/data/posts public
           cp /tmp/hydra-backup/new-post.json "$POST_FILE"
           cp /tmp/hydra-backup/posts-index.json public/posts-index.json
