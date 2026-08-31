@@ -39,7 +39,14 @@ jobs:
           pip install --quiet --upgrade pip
           pip install --quiet pytrends requests
           echo "=== Verifying imports ==="
-          python3 -c "import pytrends; import requests; print('OK: pytrends', pytrends.__version__)"
+          python3 -c "import pytrends, requests; print('OK pytrends=' + pytrends.__version__)"
+
+      - name: Syntax check script
+        run: |
+          set -e
+          echo "=== Syntax check ==="
+          python3 -m py_compile .github/scripts/generate_post.py
+          echo "Syntax OK"
 
       - name: Generate post
         id: generate
@@ -49,92 +56,69 @@ jobs:
           API_KEY_CMC: ${{ secrets.API_KEY_CMC }}
           API_KEY_COINGECKO: ${{ secrets.API_KEY_COINGECKO }}
         run: |
-          # --- Purge stale Python bytecode ---
+          set -e
+
+          # Purge stale Python bytecode
           find .github/scripts -name "*.pyc" -delete 2>/dev/null || true
           find .github/scripts -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-          echo "Bytecode cache purged."
 
-          # --- Syntax-check the script before running it ---
-          echo "=== Syntax check ==="
-          python3 -m py_compile .github/scripts/generate_post.py && echo "Syntax OK" || {
-            echo "ERROR: generate_post.py has a syntax error"
-            python3 -c "
-import ast, sys
-try:
-    ast.parse(open('.github/scripts/generate_post.py').read())
-except SyntaxError as e:
-    print(f'SyntaxError at line {e.lineno}: {e.msg}')
-    print(f'  >> {e.text}')
-    sys.exit(1)
-"
-            exit 1
-          }
-
-          # --- Run script; capture exit code cleanly (no pipefail+tee trap) ---
+          # Run script and capture output + exit code
           python3 -B .github/scripts/generate_post.py > /tmp/gen.txt 2>&1
           PYTHON_EXIT=$?
 
-          # Display full output in Actions log
           cat /tmp/gen.txt
-
           echo "--- Python exit code: $PYTHON_EXIT ---"
 
           if [ "$PYTHON_EXIT" != "0" ]; then
-            echo "ERROR: generate_post.py exited with code $PYTHON_EXIT"
+            echo "ERROR: generate_post.py failed with exit code $PYTHON_EXIT"
             exit 1
           fi
 
-          # --- Extract SLUG and POST_FILE from script stdout markers ---
+          # Extract outputs
           SLUG=$(grep '^SLUG:' /tmp/gen.txt | tail -1 | cut -d: -f2 | tr -d ' \r\n')
           POST_FILE=$(grep '^SUCCESS:' /tmp/gen.txt | tail -1 | sed 's/^SUCCESS://' | tr -d ' \r\n')
 
           echo "Captured SLUG='$SLUG'"
           echo "Captured POST_FILE='$POST_FILE'"
 
-          # --- Hard-fail if SLUG is empty ---
+          # Hard-fail on empty outputs
           if [ -z "$SLUG" ]; then
-            echo "ERROR: SLUG is empty — script did not print a 'SLUG:' line"
-            echo "Last 30 lines of script output:"
+            echo "ERROR: SLUG is empty — script did not print a SLUG: line"
             tail -30 /tmp/gen.txt
             exit 1
           fi
 
-          # --- Hard-fail if POST_FILE is empty ---
           if [ -z "$POST_FILE" ]; then
-            echo "ERROR: POST_FILE is empty — script did not print a 'SUCCESS:' line"
-            echo "Last 30 lines of script output:"
+            echo "ERROR: POST_FILE is empty — script did not print a SUCCESS: line"
             tail -30 /tmp/gen.txt
             exit 1
           fi
 
-          # --- Validate the post file actually exists on disk ---
+          # Validate files exist
           if [ ! -f "$POST_FILE" ]; then
-            echo "ERROR: post file '$POST_FILE' does not exist on disk"
-            echo "Contents of src/data/posts/:"
-            ls -la src/data/posts/ 2>/dev/null || echo "(directory missing)"
+            echo "ERROR: post file '$POST_FILE' not found on disk"
+            ls -la src/data/posts/ 2>/dev/null || echo "(posts dir missing)"
             exit 1
           fi
 
-          # --- Validate posts-index.json ---
           if [ ! -f "public/posts-index.json" ]; then
             echo "ERROR: public/posts-index.json not found"
             exit 1
           fi
 
-          # --- Validate sitemap.xml ---
           if [ ! -f "public/sitemap.xml" ]; then
             echo "ERROR: public/sitemap.xml not found"
             exit 1
           fi
 
-          # --- Backup all 3 generated files before any git operation ---
+          # Backup before git reset
           mkdir -p /tmp/hydra-backup
           cp "$POST_FILE"              /tmp/hydra-backup/new-post.json
           cp public/posts-index.json   /tmp/hydra-backup/posts-index.json
           cp public/sitemap.xml        /tmp/hydra-backup/sitemap.xml
-          echo "Backup OK: $POST_FILE + posts-index.json + sitemap.xml"
+          echo "Backup OK"
 
-          # --- Export step outputs ---
+          # Export outputs
           echo "slug=$SLUG"           >> "$GITHUB_OUTPUT"
           echo "post_file=$POST_FILE" >> "$GITHUB_OUTPUT"
           echo "Generated: $POST_FILE (slug: $SLUG)"
@@ -146,34 +130,31 @@ except SyntaxError as e:
         run: |
           set -e
 
-          # Safety: outputs must not be empty
           if [ -z "$SLUG" ] || [ -z "$POST_FILE" ]; then
-            echo "ERROR: SLUG or POST_FILE output is empty — aborting commit step"
+            echo "ERROR: SLUG or POST_FILE is empty — aborting"
             exit 1
           fi
 
           git config user.name  "HYDRA AI Bot"
           git config user.email "bot@hydraxrd.com"
 
-          # Sync with remote without losing generated files (kept in /tmp/hydra-backup)
           git fetch origin main
           git reset --hard origin/main
 
-          # Restore the 3 generated files after hard reset
           mkdir -p src/data/posts public
-          cp /tmp/hydra-backup/new-post.json       "$POST_FILE"
-          cp /tmp/hydra-backup/posts-index.json    public/posts-index.json
-          cp /tmp/hydra-backup/sitemap.xml         public/sitemap.xml
-          echo "Restored: $POST_FILE + posts-index.json + sitemap.xml"
+          cp /tmp/hydra-backup/new-post.json    "$POST_FILE"
+          cp /tmp/hydra-backup/posts-index.json public/posts-index.json
+          cp /tmp/hydra-backup/sitemap.xml      public/sitemap.xml
+          echo "Restored files"
 
           git add "$POST_FILE" public/posts-index.json public/sitemap.xml
           git status
 
           if git diff --cached --quiet; then
-            echo "Nothing to commit, skipping"
+            echo "Nothing to commit"
             exit 0
           fi
 
           git commit -m "Auto post: $SLUG"
           git push origin main
-          echo "SUCCESS: post pushed — Cloudflare deploy triggered"
+          echo "SUCCESS: pushed — Cloudflare deploy triggered"
