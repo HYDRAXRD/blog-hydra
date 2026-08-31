@@ -41,22 +41,27 @@ jobs:
           API_KEY_CMC: ${{ secrets.API_KEY_CMC }}
           API_KEY_COINGECKO: ${{ secrets.API_KEY_COINGECKO }}
         run: |
-          # --- Purge stale Python bytecode to prevent SyntaxError from cached .pyc ---
+          # --- Purge stale Python bytecode ---
           find .github/scripts -name "*.pyc" -delete 2>/dev/null || true
           find .github/scripts -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
           echo "Bytecode cache purged."
 
-          # --- Run the script, capturing output and exit code safely ---
-          # pipefail ensures the pipe's exit code reflects python3, not tee
-          set -o pipefail
-          python3 -B .github/scripts/generate_post.py 2>&1 | tee /tmp/gen.txt
+          # --- Run script writing output to file; capture exit code BEFORE tee ---
+          # NOTE: pipefail is intentionally NOT used here.
+          # With pipefail + tee, $? captures tee's exit (always 0), masking Python failures.
+          # Instead we redirect stdout+stderr to a file, then tee for live display.
+          python3 -B .github/scripts/generate_post.py > /tmp/gen.txt 2>&1
           PYTHON_EXIT=$?
 
-          echo "--- Script output tail (last 30 lines) ---"
-          tail -30 /tmp/gen.txt
+          # Display output for the GitHub Actions log
+          cat /tmp/gen.txt
+
+          echo "--- Python exit code: $PYTHON_EXIT ---"
 
           if [ "$PYTHON_EXIT" != "0" ]; then
             echo "ERROR: generate_post.py exited with code $PYTHON_EXIT"
+            echo "Full script output:"
+            cat /tmp/gen.txt
             exit 1
           fi
 
