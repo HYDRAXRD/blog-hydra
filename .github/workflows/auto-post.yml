@@ -36,10 +36,14 @@ jobs:
           echo "=== Python version ==="
           python3 --version
           echo "=== Installing dependencies ==="
-          pip install --quiet --upgrade pip
-          pip install --quiet pytrends requests
-          echo "=== Verifying imports ==="
-          python3 -c "import pytrends, requests; print('OK: pytrends and requests imported')"
+          pip install --upgrade pip
+          pip install requests
+          # pytrends is optional — install with fallback so failures don't block the workflow
+          pip install pytrends || echo "WARNING: pytrends install failed — will use curated fallback topics"
+          echo "=== Verifying required imports ==="
+          python3 -c "import requests; print('OK: requests imported')"
+          echo "=== Checking pytrends (optional) ==="
+          python3 -c "import pytrends; print('OK: pytrends imported')" || echo "INFO: pytrends not available — curated fallback will be used"
 
       - name: Syntax check script
         run: |
